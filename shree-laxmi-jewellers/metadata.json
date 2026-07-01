@@ -1,0 +1,6 @@
+{
+  "name": "Shree Laxmi Jewellers",
+  "description": "Complete Jewellery Shop ERP Demo",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
