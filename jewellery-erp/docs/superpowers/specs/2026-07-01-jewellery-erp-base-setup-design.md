@@ -26,6 +26,14 @@ End state: `pnpm build` compiles; migration + seed ready to run once Neon Auth k
 | Auth | Neon Auth (`@stackframe/stack`) | doc 04 §5 |
 | Provisioning | Code built now, Neon Auth keys added by user later | user |
 | Tenancy | shared DB / shared schema, `tenant_id` on every business table | doc 03 §13 |
+| Server state | TanStack React Query (`@tanstack/react-query`) | doc 07 + user |
+| Client/UI state | Zustand | user |
+
+**State split:** clean separation of concerns.
+
+- **Server state** → TanStack Query. Anything from the DB/API (invoices, inventory, customers). Handles caching, refetch, invalidation, loading/error. Initial RSC data hydrated into Query cache where useful.
+- **Client/UI state** → Zustand. Ephemeral UI only, never server data: sidebar collapsed, active tenant selection (mirror of session), theme-independent UI toggles, in-progress bill draft in the POS screen, modal/dialog open state.
+- **Rule:** never duplicate server data into Zustand. Query owns server truth; Zustand owns UI truth.
 
 **Money formatting:** all money stored as `Decimal(14,2)`. `lib/format.ts` `formatINR` takes a rupee value (not paise) and renders Indian grouping with 2 decimals — `₹1,21,212.12`. Overrides doc 07's paise-integer note per user.
 
@@ -35,11 +43,22 @@ Delivered in reviewable stages, same end state.
 
 ### (a) Dependencies, design tokens, format utils
 
-- Install: `prisma`, `@prisma/client`, `@stackframe/stack`, `@neondatabase/serverless`, `next-themes`, `react-hook-form`, `@hookform/resolvers`, `zod`.
+- Install: `prisma`, `@prisma/client`, `@stackframe/stack`, `@neondatabase/serverless`, `next-themes`, `react-hook-form`, `@hookform/resolvers`, `zod`, `@tanstack/react-query`, `@tanstack/react-query-devtools`, `zustand`.
 - Add shadcn primitives: `input`, `label`, `card`, `form`, `sonner`, `dropdown-menu`, `avatar`, `separator`, `sidebar`, `skeleton`.
 - `app/globals.css` — replace greyscale tokens with doc 07 §4.2 semantic palette: deep-gold `--primary`, plus `--success` / `--warning` / `--destructive`, light + dark. Keep oklch form already in file.
 - `app/layout.tsx` — Inter variable font w/ tabular numerals (replace Geist); `next-themes` provider; metadata → "Jewellery ERP".
 - `lib/format.ts` — `formatINR`, `formatIndianNumber`, `formatWeight`, `formatINRWords` (rupee-based, 2 dp).
+
+**Providers & state wiring**
+
+- `components/providers.tsx` (Client) — composes `<QueryClientProvider>` (+ Devtools in dev) inside `next-themes` + `<StackProvider>`. Mounted once in `app/layout.tsx`.
+- `lib/query/client.ts` — `getQueryClient()` (server: fresh per request; browser: singleton) with sane defaults (`staleTime`, retry, refetch-on-focus off for POS).
+- `lib/query/keys.ts` — typed query-key factory (`qk.invoices.list(tenantId)`, `qk.inventory.item(id)` …) so invalidation is centralized, not stringly-typed.
+- `lib/stores/` — Zustand stores, one file per domain of UI state:
+  - `ui-store.ts` — sidebar collapsed, command-palette open, global dialogs.
+  - `tenant-store.ts` — active tenant id/name mirror for client components (source of truth stays server session).
+  - `bill-draft-store.ts` — in-progress POS bill lines (stub now; billing engine later).
+- **Convention:** hooks live in `lib/query/hooks/*` (e.g. `use-invoices.ts` wrapping `useQuery`/`useMutation`); components consume hooks, never call fetch/Prisma directly on the client.
 
 ### (b) Database — full schema + migration + seed
 
@@ -72,7 +91,7 @@ Delivered in reviewable stages, same end state.
 - `(auth)/login/page.tsx` — RHF + Zod, email/password, gold-branded shadcn card, link to sign-up + forgot password. Calls Neon Auth client sign-in.
 - `(auth)/sign-up/page.tsx` — name/email/password/business-name (onboarding shape per doc 04 §6.1).
 - `(auth)/layout.tsx` — centered auth shell.
-- `(app)/layout.tsx` — sidebar (permission-gated nav stubs: Dashboard, Billing, Inventory, Customers, Reports, Settings) + topbar (tenant switcher stub, user menu, theme toggle). Calls `requireSession()`.
+- `(app)/layout.tsx` — sidebar (permission-gated nav stubs: Dashboard, Billing, Inventory, Customers, Reports, Settings) + topbar (tenant switcher stub, user menu, theme toggle). Calls `requireSession()` server-side; passes tenant into `tenant-store`. Sidebar collapse driven by `ui-store` (Zustand). Topbar user menu / theme toggle are client, reading stores.
 - `(app)/dashboard/page.tsx` — placeholder stat cards using `formatINRWords` (Today's Sales, Outstanding, Stock Value, Low Stock).
 - `loading.tsx`, `error.tsx`, `not-found.tsx` at app root.
 - `app/page.tsx` — redirect `/` → `/dashboard` (or `/login`).
@@ -87,6 +106,13 @@ prisma/seed.ts                       (new)
 prisma/migrations/**                 (generated + hand-edited SQL)
 lib/db.ts                            (new)
 lib/format.ts                        (new)
+components/providers.tsx             (new — QueryClient + theme + Stack)
+lib/query/client.ts                  (new)
+lib/query/keys.ts                    (new)
+lib/query/hooks/*.ts                 (new — useQuery/useMutation wrappers)
+lib/stores/ui-store.ts               (new — Zustand)
+lib/stores/tenant-store.ts           (new — Zustand)
+lib/stores/bill-draft-store.ts       (new — Zustand, POS stub)
 lib/auth/server.ts                   (new)
 lib/auth/session.ts                  (new)
 lib/db/tenant-scope.ts               (new)
@@ -122,3 +148,5 @@ package.json                         (changed — deps + prisma.seed)
 6. `formatINR(121.12)` → `₹121.12`; `formatINR(121212.5)` → `₹1,21,212.50`.
 7. Seed is idempotent (re-run → no dupes).
 8. `.env.example` documents every required var.
+9. QueryClientProvider mounted app-wide; a sample `useQuery` hook + query-key factory exist; Devtools load in dev only.
+10. Zustand stores exist (ui/tenant/bill-draft); sidebar collapse persists via `ui-store`; no server data duplicated into any store.
