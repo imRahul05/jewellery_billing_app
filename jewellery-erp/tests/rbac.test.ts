@@ -195,4 +195,41 @@ describe("RBAC and Authorization Security Tests", () => {
       error: "Last Owner Protection: You cannot deactivate or revoke the Owner role from the last active Business Owner.",
     });
   });
+
+  test("authorize() deny-by-default: throws AuthorizationError for permission not granted to role", async () => {
+    // Cashier does NOT have user:manage — authorize must throw
+    await expect(
+      runWithTenant(
+        { tenantId, userId: cashierUserId, isSuperAdmin: false },
+        () => authorize("user:manage"),
+      )
+    ).rejects.toThrow(AuthorizationError);
+
+    await expect(
+      runWithTenant(
+        { tenantId, userId: cashierUserId, isSuperAdmin: false },
+        () => authorize("user:manage"),
+      )
+    ).rejects.toThrow('Forbidden: missing permission "user:manage"');
+  });
+
+  test("authorize() deny-by-default: throws AuthorizationError for unknown permission key", async () => {
+    // A completely nonexistent permission key must also be denied
+    await expect(
+      runWithTenant(
+        { tenantId, userId: cashierUserId, isSuperAdmin: false },
+        () => authorize("nonexistent:permission"),
+      )
+    ).rejects.toThrow(AuthorizationError);
+  });
+
+  test("authorize() passes for a permission the role is granted", async () => {
+    // Owner has role:manage — should resolve without throwing
+    await expect(
+      runWithTenant(
+        { tenantId, userId: ownerUserId, isSuperAdmin: false },
+        () => authorize("role:manage"),
+      )
+    ).resolves.toBeDefined();
+  });
 });
