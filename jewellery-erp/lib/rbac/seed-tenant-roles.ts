@@ -128,7 +128,7 @@ const ROLE_PERMISSIONS: Record<string, RoleDef> = {
  */
 export async function seedTenantRoles(
   tenantId: string,
-  tx: TxClient = prisma as unknown as TxClient,
+  tx: TxClient = prisma as TxClient,
 ): Promise<void> {
   // Fetch all existing permissions in the DB to obtain their IDs.
   const dbPermissions = await tx.permission.findMany({
@@ -139,12 +139,9 @@ export async function seedTenantRoles(
     dbPermissions.map((p) => [p.key, p.id]),
   );
 
-  for (const [key, roleDef] of Object.entries(ROLE_PERMISSIONS)) {
-    // Resolve permission IDs for keys
-    const permissionIds = roleDef.permissionKeys
-      .map((k) => permMap.get(k))
-      .filter((id): id is string => !!id);
+  const roles: { id: string; name: string }[] = [];
 
+  for (const roleDef of Object.values(ROLE_PERMISSIONS)) {
     // Upsert role using the tenantId_name unique constraint
     const role = await tx.role.upsert({
       where: {
@@ -163,21 +160,45 @@ export async function seedTenantRoles(
         name: roleDef.name,
         description: roleDef.description,
       },
+      select: {
+        id: true,
+        name: true,
+      },
     });
+    roles.push(role);
+  }
 
-    // Delete existing role permissions
-    await tx.rolePermission.deleteMany({
-      where: { roleId: role.id },
-    });
+  const roleMap = new Map<string, string>(roles.map((r) => [r.name, r.id]));
 
-    // Create new role permissions
-    if (permissionIds.length > 0) {
-      await tx.rolePermission.createMany({
-        data: permissionIds.map((permissionId) => ({
-          roleId: role.id,
-          permissionId,
-        })),
+  // Delete all existing role permissions for these roles in one query
+  const roleIds = roles.map((r) => r.id);
+  await tx.rolePermission.deleteMany({
+    where: {
+      roleId: { in: roleIds },
+    },
+  });
+
+  // Prepare all new role permissions to create in one query
+  const rolePermissionsData: { roleId: string; permissionId: string }[] = [];
+  for (const roleDef of Object.values(ROLE_PERMISSIONS)) {
+    const roleId = roleMap.get(roleDef.name);
+    if (!roleId) continue;
+
+    const permissionIds = roleDef.permissionKeys
+      .map((k) => permMap.get(k))
+      .filter((id): id is string => !!id);
+
+    for (const permissionId of permissionIds) {
+      rolePermissionsData.push({
+        roleId,
+        permissionId,
       });
     }
+  }
+
+  if (rolePermissionsData.length > 0) {
+    await tx.rolePermission.createMany({
+      data: rolePermissionsData,
+    });
   }
 }

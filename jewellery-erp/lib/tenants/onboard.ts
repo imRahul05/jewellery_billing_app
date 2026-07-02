@@ -1,8 +1,6 @@
-import { prisma, type Db } from "@/lib/db";
+import { prisma } from "@/lib/db";
 import { seedTenantRoles } from "@/lib/rbac/seed-tenant-roles";
 import { AuditAction, Prisma } from "@prisma/client";
-
-type TxClient = Omit<Db, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
 interface OnboardInput {
   authUserId: string;
@@ -77,7 +75,7 @@ export async function onboardBusiness(input: OnboardInput): Promise<OnboardResul
     });
 
     // 4. Seed the 5 system roles for the tenant
-    await seedTenantRoles(tenant.id, tx as unknown as TxClient);
+    await seedTenantRoles(tenant.id, tx);
 
     // 5. Create UserTenantMembership as Owner
     const membership = await tx.userTenantMembership.create({
@@ -144,5 +142,8 @@ export async function onboardBusiness(input: OnboardInput): Promise<OnboardResul
       tenantId: tenant.id,
       membershipId: membership.id,
     };
+  }, {
+    maxWait: 15000,
+    timeout: 30000,
   });
 }
