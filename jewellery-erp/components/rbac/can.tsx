@@ -19,24 +19,24 @@ export async function Can({
   children,
   fallback = null,
 }: CanProps): Promise<React.ReactElement | null> {
+  let allowed = false;
+
   try {
     const session = await requireSession();
-    if (!session) {
-      return <>{fallback}</>;
+    if (session) {
+      const perms = await getEffectivePermissions(session.userId, session.tenantId);
+      const required = Array.isArray(permission) ? permission : [permission];
+      // AND semantics: all required permissions must be met
+      allowed = required.every((p) => perms.has(p));
     }
-
-    const perms = await getEffectivePermissions(session.userId, session.tenantId);
-    const required = Array.isArray(permission) ? permission : [permission];
-    
-    // AND semantics: all required permissions must be met
-    const allowed = required.every((p) => perms.has(p));
-
-    if (allowed) {
-      return <>{children}</>;
-    }
-    
-    return <>{fallback}</>;
   } catch {
-    return <>{fallback}</>;
+    // On any error (e.g. no session), deny access
+    allowed = false;
   }
+
+  if (allowed) {
+    return <>{children}</>;
+  }
+
+  return <>{fallback}</>;
 }

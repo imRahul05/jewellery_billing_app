@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { seedTenantRoles } from "@/lib/rbac/seed-tenant-roles";
 import { getEffectivePermissions, hasPermission } from "@/lib/rbac/permissions";
 import { authorize, AuthorizationError } from "@/lib/rbac/authorize";
-import { assignRole, revokeRole, deactivateMember } from "@/app/(app)/settings/users/actions";
+import { revokeRole, deactivateMember } from "@/app/(app)/settings/users/actions";
 import { runWithTenant } from "@/lib/db/tenant-context";
 
 vi.mock("@/lib/auth/session", () => {

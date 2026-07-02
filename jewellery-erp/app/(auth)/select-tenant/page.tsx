@@ -50,7 +50,7 @@ export default async function SelectTenantPage() {
         <CardHeader>
           <CardTitle>Welcome to Jewellery ERP</CardTitle>
           <CardDescription>
-            Let's set up your business workspace to get started.
+            Let&apos;s set up your business workspace to get started.
           </CardDescription>
         </CardHeader>
         <CardContent>

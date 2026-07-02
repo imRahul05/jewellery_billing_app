@@ -6,9 +6,14 @@
  * See base-setup design §2 (overrides doc 07's paise-integer note).
  */
 
-type Num = number | string;
+type Num = number | string | { toNumber(): number };
 
-const toNumber = (v: Num): number => (typeof v === "string" ? Number(v) : v);
+const toNumber = (v: Num): number => {
+  if (typeof v === "number") return v;
+  if (typeof v === "string") return Number(v);
+  if (v && typeof v.toNumber === "function") return v.toNumber();
+  return Number(v);
+};
 
 /** `formatINR(121.12)` → `₹121.12`; `formatINR(121212.5)` → `₹1,21,212.50`. */
 export function formatINR(rupees: Num): string {

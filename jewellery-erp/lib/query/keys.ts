@@ -27,6 +27,23 @@ export const qk = {
       ["customers", tenantId, "list", search ?? ""] as const,
     detail: (tenantId: string, id: string) =>
       ["customers", tenantId, "detail", id] as const,
+    ledger: (tenantId: string, id: string) =>
+      ["customers", tenantId, "ledger", id] as const,
+  },
+  suppliers: {
+    all: (tenantId: string) => ["suppliers", tenantId] as const,
+    list: (tenantId: string, search?: string) =>
+      ["suppliers", tenantId, "list", search ?? ""] as const,
+    detail: (tenantId: string, id: string) =>
+      ["suppliers", tenantId, "detail", id] as const,
+  },
+  settings: {
+    detail: (tenantId: string) => ["settings", tenantId] as const,
+  },
+  metalRates: {
+    all: (tenantId: string) => ["metal-rates", tenantId] as const,
+    list: (tenantId: string, filters?: Record<string, unknown>) =>
+      ["metal-rates", tenantId, "list", filters ?? {}] as const,
   },
   dashboard: {
     stats: (tenantId: string) => ["dashboard", tenantId, "stats"] as const,

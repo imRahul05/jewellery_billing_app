@@ -7,7 +7,8 @@ class MockRequestCookies {
     return this.store.get(name);
   }
 
-  set(name: string, value: string, options?: any) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- options param kept for API compatibility
+  set(name: string, value: string, ...args: unknown[]) {
     this.store.set(name, { name, value });
     return this;
   }

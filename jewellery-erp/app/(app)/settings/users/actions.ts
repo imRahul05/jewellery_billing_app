@@ -277,7 +277,7 @@ export async function assignRole(
       return { error: "Selected role does not exist in this business." };
     }
 
-    const userRole = await prisma.userRole.upsert({
+    await prisma.userRole.upsert({
       where: {
         membershipId_roleId: {
           membershipId: input.membershipId,
@@ -418,7 +418,7 @@ export async function deactivateMember(
 // Lazy import Neon Auth to avoid circular dependencies
 const auth = {
   async getSession() {
-    const { auth } = require("@/lib/auth/server");
-    return auth.getSession();
+    const { auth: authModule } = await import("@/lib/auth/server");
+    return authModule.getSession();
   },
 };
