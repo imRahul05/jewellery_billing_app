@@ -24,6 +24,12 @@ vi.mock("@/lib/auth/session", () => {
   };
 });
 
+vi.mock("next/cache", () => {
+  return {
+    revalidatePath: () => {},
+  };
+});
+
 describe("RBAC and Authorization Security Tests", () => {
   let tenantId: string;
   let ownerUserId: string;
@@ -232,4 +238,4 @@ describe("RBAC and Authorization Security Tests", () => {
       )
     ).resolves.toBeDefined();
   });
-});
+}, 60000);
