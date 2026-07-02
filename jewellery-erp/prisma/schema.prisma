@@ -7,7 +7,8 @@
 // the pooled DATABASE_URL via a driver adapter (lib/db.ts); migrations use the
 // direct DIRECT_URL configured in prisma.config.ts.
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [pg_session_jwt]
 }
 
 generator client {
@@ -219,6 +220,7 @@ model Tenant {
   auditLogs          AuditLog[]
   fileAssets         FileAsset[]            @relation("TenantAssets")
   featureFlags       FeatureFlag[]
+  invitations        Invitation[]
 
   @@index([isActive])
   @@map("tenants")
@@ -298,6 +300,7 @@ model User {
   paymentsReceived  Payment[]              @relation("PaymentReceivedBy")
   notifications     Notification[]
   filesUploaded     FileAsset[]            @relation("AssetUploadedBy")
+  invitationsSent   Invitation[]           @relation("InvitationsSent")
 
   @@map("users")
 }
@@ -335,6 +338,7 @@ model Role {
   tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   permissions RolePermission[]
   userRoles   UserRole[]
+  invitations Invitation[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -849,4 +853,25 @@ model FileAsset {
   @@unique([r2Bucket, r2Key])
   @@index([tenantId, purpose])
   @@map("file_assets")
+}
+
+model Invitation {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  email       String
+  roleId      String   @map("role_id")
+  token       String   @unique
+  status      String   @default("pending") // pending, accepted, expired, revoked
+  invitedById String   @map("invited_by_id")
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role      Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  invitedBy User   @relation("InvitationsSent", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([email])
+  @@map("invitations")
 }

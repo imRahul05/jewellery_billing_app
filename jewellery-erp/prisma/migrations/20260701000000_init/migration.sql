@@ -1,6 +1,9 @@
 -- CreateSchema
 CREATE SCHEMA IF NOT EXISTS "public";
 
+-- CreateExtension
+CREATE EXTENSION IF NOT EXISTS "pg_session_jwt";
+
 -- CreateEnum
 CREATE TYPE "invoice_type" AS ENUM ('sales', 'purchase', 'quotation', 'estimate', 'return', 'exchange', 'repair');
 
