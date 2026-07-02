@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Keep Prisma out of the server bundle (native engine).
+  serverExternalPackages: ["@prisma/client", "prisma"],
 };
 
 export default nextConfig;
