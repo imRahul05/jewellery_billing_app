@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { auth } from "@/lib/auth/server";
 import { prisma } from "@/lib/db";
 
@@ -6,6 +7,7 @@ export interface Session {
   userId: string;
   tenantId: string;
   membershipId: string;
+  isSuperAdmin: boolean;
 }
 
 /**
@@ -15,12 +17,10 @@ export interface Session {
  * projection keyed by `authUserId`. Tenant is resolved from an ACTIVE
  * `UserTenantMembership` — never from client input (doc 04 §5.3 rule).
  *
- * NOTE: the current Neon Auth beta does not expose custom session metadata,
- * so "active tenant" is derived from memberships: a single active membership
- * is auto-selected; multiple memberships require `/select-tenant` (later phase).
+ * Multi-tenant selection uses a cookie (`current_tenant_id`) if the user has
+ * multiple active memberships.
  *
- * Returns `{ userId, tenantId, membershipId }` — userId is our internal
- * `users.id`, not the auth subject.
+ * Returns `{ userId, tenantId, membershipId, isSuperAdmin }`
  */
 export async function requireSession(): Promise<Session> {
   const { data: session } = await auth.getSession();
@@ -31,7 +31,7 @@ export async function requireSession(): Promise<Session> {
   // Map auth subject → app user projection.
   const user = await prisma.user.findUnique({
     where: { authUserId },
-    select: { id: true },
+    select: { id: true, isSuperAdmin: true },
   });
   if (!user) redirect("/select-tenant");
 
@@ -41,13 +41,27 @@ export async function requireSession(): Promise<Session> {
     orderBy: { createdAt: "asc" },
   });
 
-  // No active membership yet, or must pick among several → tenant selector.
-  if (memberships.length !== 1) redirect("/select-tenant");
+  if (memberships.length === 0) {
+    redirect("/select-tenant");
+  }
 
-  const membership = memberships[0];
+  let membership = memberships[0];
+
+  if (memberships.length > 1) {
+    const cookieStore = await cookies();
+    const selectedTenantId = cookieStore.get("current_tenant_id")?.value;
+    const found = memberships.find((m) => m.tenantId === selectedTenantId);
+    if (found) {
+      membership = found;
+    } else {
+      redirect("/select-tenant");
+    }
+  }
+
   return {
     userId: user.id,
     tenantId: membership.tenantId,
     membershipId: membership.id,
+    isSuperAdmin: user.isSuperAdmin,
   };
 }

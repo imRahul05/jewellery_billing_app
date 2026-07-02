@@ -11,15 +11,18 @@ import { create } from "zustand";
 interface TenantState {
   tenantId: string | null;
   tenantName: string | null;
-  setTenant: (tenant: { id: string; name: string } | null) => void;
+  permissions: string[];
+  setTenant: (tenant: { id: string; name: string } | null, permissions?: string[]) => void;
 }
 
 export const useTenantStore = create<TenantState>((set) => ({
   tenantId: null,
   tenantName: null,
-  setTenant: (tenant) =>
+  permissions: [],
+  setTenant: (tenant, permissions = []) =>
     set({
       tenantId: tenant?.id ?? null,
       tenantName: tenant?.name ?? null,
+      permissions,
     }),
 }));

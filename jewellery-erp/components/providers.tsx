@@ -28,6 +28,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       redirectTo="/dashboard"
       Link={Link}
       defaultTheme="system"
+      basePath=""
+      viewPaths={{
+        SIGN_IN: "login",
+        SIGN_UP: "sign-up",
+      }}
     >
       <QueryClientProvider client={queryClient}>
         {children}
