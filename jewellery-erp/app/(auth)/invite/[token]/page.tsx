@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { getPendingInvitationByTokenQuery } from "@/lib/db/queries/invitations";
 import { acceptInvite } from "@/app/(app)/settings/users/actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,13 +12,7 @@ export default async function InviteAcceptPage({ params }: PageProps) {
   const { token } = await params;
 
   // Resolve invitation details
-  const invitation = await prisma.invitation.findFirst({
-    where: { token, status: "pending" },
-    include: {
-      tenant: true,
-      role: true,
-    },
-  });
+  const invitation = await getPendingInvitationByTokenQuery(token);
 
   if (!invitation) {
     return (
