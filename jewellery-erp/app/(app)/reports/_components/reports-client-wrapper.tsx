@@ -12,13 +12,17 @@ import {
   Calendar,
   Layers,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Download,
+  ShieldAlert
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatINR, formatWeight, formatINRWords } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useTenantStore } from "@/lib/stores/tenant-store";
+import { exportToCSV } from "@/lib/utils/export";
 
 interface PaymentBreakdown {
   method: string;
@@ -43,19 +47,21 @@ interface InventoryStats {
   inStockCostPrice: string;
 }
 
+interface ReportInvoice {
+  id: string;
+  invoiceNumber: string;
+  type: string;
+  status: string;
+  grandTotal: string;
+  invoiceDate: string;
+  customerName: string | null;
+}
+
 interface ReportData {
   summary: SalesPurchaseSummary;
   payments: PaymentBreakdown[];
   inventory: InventoryStats;
-  recentInvoices: {
-    id: string;
-    invoiceNumber: string;
-    type: string;
-    status: string;
-    grandTotal: string;
-    invoiceDate: string;
-    customerName: string | null;
-  }[];
+  recentInvoices: ReportInvoice[];
 }
 
 interface ReportsClientWrapperProps {
@@ -89,12 +95,51 @@ export function ReportsClientWrapper({
   endDateStr,
 }: ReportsClientWrapperProps): React.JSX.Element {
   const router = useRouter();
+  const [activeTab, setActiveTab] = React.useState<"summary" | "sales" | "gst" | "inventory">("summary");
+
+  // Retrieve client permissions from Zustand store
+  const permissions = useTenantStore((s) => s.permissions);
+  const canReadCost = permissions.includes("report:export") || permissions.includes("*");
+
   const handleRangeChange = (newRange: string) => {
     router.push(`/reports?range=${newRange}`);
   };
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleExportSales = () => {
+    const exportData = reportData.recentInvoices.map((inv) => ({
+      "Invoice Number": inv.invoiceNumber,
+      "Date": new Date(inv.invoiceDate).toLocaleDateString("en-IN"),
+      "Client": inv.customerName || "Walk-in Client",
+      "Type": inv.type.toUpperCase(),
+      "Status": inv.status,
+      "Grand Total (INR)": inv.grandTotal,
+    }));
+    exportToCSV(exportData, `sales_report_${range}`);
+  };
+
+  const handleExportGst = () => {
+    const exportData = reportData.recentInvoices.map((inv) => ({
+      "Invoice Number": inv.invoiceNumber,
+      "Date": new Date(inv.invoiceDate).toLocaleDateString("en-IN"),
+      "Type": inv.type.toUpperCase(),
+      "Grand Total (INR)": inv.grandTotal,
+    }));
+    exportToCSV(exportData, `gst_report_${range}`);
+  };
+
+  const handleExportInventory = () => {
+    if (!canReadCost) return;
+    const exportData = [{
+      "In Stock Items": reportData.inventory.inStockCount,
+      "Gross Weight (g)": reportData.inventory.inStockGrossWeight,
+      "Net Weight (g)": reportData.inventory.inStockNetWeight,
+      "Cost Price Valuation (INR)": reportData.inventory.inStockCostPrice,
+    }];
+    exportToCSV(exportData, `inventory_valuation_${range}`);
   };
 
   // Calculate tax sum
@@ -158,7 +203,7 @@ export function ReportsClientWrapper({
                   key={r.id}
                   onClick={() => handleRangeChange(r.id)}
                   className={cn(
-                    "rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-all cursor-pointer",
                     range === r.id
                       ? "bg-primary text-primary-foreground shadow-sm"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -169,7 +214,7 @@ export function ReportsClientWrapper({
               ))}
             </div>
 
-            <Button variant="outline" size="icon" onClick={handlePrint} title="Print Report">
+            <Button variant="outline" size="icon" onClick={handlePrint} title="Print Report" className="cursor-pointer">
               <Printer className="h-4 w-4" />
             </Button>
           </div>
@@ -240,9 +285,16 @@ export function ReportsClientWrapper({
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold font-mono tracking-tight text-foreground">
-                {formatINRWords(reportData.inventory.inStockCostPrice)}
-              </div>
+              {canReadCost ? (
+                <div className="text-2xl font-bold font-mono tracking-tight text-foreground">
+                  {formatINRWords(reportData.inventory.inStockCostPrice)}
+                </div>
+              ) : (
+                <div className="text-base font-semibold tracking-tight text-muted-foreground flex items-center gap-1 py-1">
+                  <ShieldAlert className="h-4 w-4 text-amber-500" />
+                  Restricted
+                </div>
+              )}
               <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
                 <Layers className="h-3.5 w-3.5 text-muted-foreground/60" />
                 <span>{reportData.inventory.inStockCount} items ({formatWeight(reportData.inventory.inStockNetWeight)} net)</span>
@@ -251,176 +303,284 @@ export function ReportsClientWrapper({
           </Card>
         </div>
 
-        {/* Charts & Graphs Block */}
-        <div className="grid gap-6 md:grid-cols-3">
-          {/* Sales Performance Chart (SVG) */}
-          <Card className="col-span-2 shadow-sm border">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Sales Invoice Trend</CardTitle>
-              <CardDescription>Value of the latest sales transactions within the current range</CardDescription>
-            </CardHeader>
-            <CardContent className="h-64 flex flex-col justify-between">
-              {chartInvoices.length > 0 ? (
-                <div className="h-full flex flex-col justify-end">
-                  <div className="flex h-44 items-end gap-2 md:gap-4 px-2">
-                    {chartInvoices.map((inv) => {
-                      const value = Number(inv.grandTotal);
-                      const pct = (value / maxTotal) * 100;
-                      return (
-                        <div key={inv.id} className="flex-1 flex flex-col items-center group relative h-full justify-end">
-                          {/* CSS Tooltip */}
-                          <div className="absolute bottom-[calc(100%+5px)] scale-0 group-hover:scale-100 transition-all bg-popover text-popover-foreground text-[10px] font-mono p-2 rounded shadow-lg border z-20 pointer-events-none text-center whitespace-nowrap">
-                            <p className="font-semibold">{inv.invoiceNumber}</p>
-                            <p className="text-primary mt-0.5">{formatINR(inv.grandTotal)}</p>
-                          </div>
-                          
-                          {/* Bar */}
-                          <div 
-                            className="w-full bg-primary/80 hover:bg-primary rounded-t transition-all duration-300 shadow-sm"
-                            style={{ height: `${Math.max(pct, 4)}%` }}
-                          />
-                          {/* Date Label */}
-                          <span className="text-[10px] text-muted-foreground mt-2 truncate max-w-full font-mono">
-                            {new Date(inv.invoiceDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="w-full border-t border-muted/50 mt-1 pt-2 flex justify-between text-[10px] text-muted-foreground px-2 font-mono">
-                    <span>Oldest Sales</span>
-                    <span>Newest Sales</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
-                  <BarChart3 className="h-10 w-10 text-muted-foreground/40 mb-2" />
-                  <p className="text-xs font-medium">No sales data found for chart</p>
-                  <p className="text-xs">Invoices must be issued as &quot;Sales&quot; type to graph.</p>
-                </div>
+        {/* Tab Headers */}
+        <div className="border-b border-muted flex items-center gap-4 no-print mt-2">
+          {(["summary", "sales", "gst", "inventory"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                "py-2 px-1 text-sm font-semibold border-b-2 -mb-[2px] transition-all cursor-pointer capitalize",
+                activeTab === tab 
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
               )}
-            </CardContent>
-          </Card>
-
-          {/* Payment Method Share */}
-          <Card className="shadow-sm border">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Payment Methods</CardTitle>
-              <CardDescription>Breakdown of receipts total ({formatINR(totalReceipts)})</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {reportData.payments.length > 0 ? (
-                reportData.payments.map((p) => {
-                  const pct = totalReceipts > 0 ? (Number(p.total) / totalReceipts) * 100 : 0;
-                  return (
-                    <div key={p.method} className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-medium flex items-center gap-1.5">
-                          <span className="h-2 w-2 rounded-full bg-primary" />
-                          {METHOD_LABELS[p.method] || p.method}
-                        </span>
-                        <span className="text-muted-foreground font-mono">
-                          {formatINR(p.total)} ({pct.toFixed(0)}%)
-                        </span>
-                      </div>
-                      <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-primary rounded-full transition-all duration-500"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="h-44 flex flex-col items-center justify-center text-muted-foreground">
-                  <CreditCard className="h-10 w-10 text-muted-foreground/40 mb-2" />
-                  <p className="text-sm font-medium">No receipts completed</p>
-                  <p className="text-xs">Record payments against invoices to generate.</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            >
+              {tab === "gst" ? "GST Ledger" : tab === "summary" ? "Summary Dashboard" : `${tab} report`}
+            </button>
+          ))}
         </div>
 
-        {/* Detailed Transactions List */}
-        <Card className="shadow-sm border">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-base font-semibold">Reporting Log</CardTitle>
-              <CardDescription>Latest 10 invoices issued or finalized in this range</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {reportData.recentInvoices.length > 0 ? (
+        {/* Tab Content Panels */}
+        {activeTab === "summary" && (
+          <div className="grid gap-6 md:grid-cols-3">
+            {/* Sales Performance Chart (SVG) */}
+            <Card className="col-span-2 shadow-sm border">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold">Sales Invoice Trend</CardTitle>
+                <CardDescription>Value of the latest sales transactions within the current range</CardDescription>
+              </CardHeader>
+              <CardContent className="h-64 flex flex-col justify-between">
+                {chartInvoices.length > 0 ? (
+                  <div className="h-full flex flex-col justify-end">
+                    <div className="flex h-44 items-end gap-2 md:gap-4 px-2">
+                      {chartInvoices.map((inv) => {
+                        const value = Number(inv.grandTotal);
+                        const pct = (value / maxTotal) * 100;
+                        return (
+                          <div key={inv.id} className="flex-1 flex flex-col items-center group relative h-full justify-end">
+                            {/* CSS Tooltip */}
+                            <div className="absolute bottom-[calc(100%+5px)] scale-0 group-hover:scale-100 transition-all bg-popover text-popover-foreground text-[10px] font-mono p-2 rounded shadow-lg border z-20 pointer-events-none text-center whitespace-nowrap">
+                              <p className="font-semibold">{inv.invoiceNumber}</p>
+                              <p className="text-primary mt-0.5">{formatINR(inv.grandTotal)}</p>
+                            </div>
+                            
+                            {/* Bar */}
+                            <div 
+                              className="w-full bg-primary/80 hover:bg-primary rounded-t transition-all duration-300 shadow-sm"
+                              style={{ height: `${Math.max(pct, 4)}%` }}
+                            />
+                            {/* Date Label */}
+                            <span className="text-[10px] text-muted-foreground mt-2 truncate max-w-full font-mono">
+                              {new Date(inv.invoiceDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="w-full border-t border-muted/50 mt-1 pt-2 flex justify-between text-[10px] text-muted-foreground px-2 font-mono">
+                      <span>Oldest Sales</span>
+                      <span>Newest Sales</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+                    <BarChart3 className="h-10 w-10 text-muted-foreground/40 mb-2" />
+                    <p className="text-xs font-medium">No sales data found for chart</p>
+                    <p className="text-xs">Invoices must be issued as &quot;Sales&quot; type to graph.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Payment Method Share */}
+            <Card className="shadow-sm border">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold">Payment Methods</CardTitle>
+                <CardDescription>Breakdown of receipts total ({formatINR(totalReceipts)})</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {reportData.payments.length > 0 ? (
+                  reportData.payments.map((p) => {
+                    const pct = totalReceipts > 0 ? (Number(p.total) / totalReceipts) * 100 : 0;
+                    return (
+                      <div key={p.method} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full bg-primary" />
+                            {METHOD_LABELS[p.method] || p.method}
+                          </span>
+                          <span className="text-muted-foreground font-mono">
+                            {formatINR(p.total)} ({pct.toFixed(0)}%)
+                          </span>
+                        </div>
+                        <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-primary rounded-full transition-all duration-500"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="h-44 flex flex-col items-center justify-center text-muted-foreground">
+                    <CreditCard className="h-10 w-10 text-muted-foreground/40 mb-2" />
+                    <p className="text-sm font-medium">No receipts completed</p>
+                    <p className="text-xs">Record payments against invoices to generate.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {activeTab === "sales" && (
+          <Card className="shadow-sm border">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold">Sales Invoice Log</CardTitle>
+                <CardDescription>Historical ledger of invoice documents finalized within period</CardDescription>
+              </div>
+              <Button onClick={handleExportSales} variant="outline" size="sm" className="no-print gap-1.5 cursor-pointer">
+                <Download className="h-4 w-4" />
+                Export CSV
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              {reportData.recentInvoices.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Invoice #</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Client / Vendor</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Grand Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reportData.recentInvoices.map((inv) => (
+                      <TableRow key={inv.id} className="hover:bg-muted/30">
+                        <TableCell className="font-mono font-medium text-foreground">
+                          {inv.invoiceNumber}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {new Date(inv.invoiceDate).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </TableCell>
+                        <TableCell>
+                          {inv.customerName || <span className="text-muted-foreground/60">Walk-in Client</span>}
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className={cn(
+                              "inline-flex items-center rounded px-2 py-0.5 text-xs font-medium",
+                              inv.type === "sales"
+                                ? "bg-blue-500/10 text-blue-700 dark:text-blue-400"
+                                : "bg-purple-500/10 text-purple-700 dark:text-purple-400"
+                            )}
+                          >
+                            {inv.type.toUpperCase()}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className={cn(
+                              "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold font-mono",
+                              inv.status === "paid" && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+                              inv.status === "partially_paid" && "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+                              inv.status === "draft" && "bg-slate-500/10 text-slate-700 dark:text-slate-400",
+                              (inv.status === "cancelled" || inv.status === "void") && "bg-destructive/10 text-destructive"
+                            )}
+                          >
+                            {inv.status.replace("_", " ")}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-semibold text-foreground">
+                          {formatINR(inv.grandTotal)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                  <FileText className="h-10 w-10 text-muted-foreground/35 mb-2" />
+                  <p className="font-medium">No sales invoices found for this range</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {activeTab === "gst" && (
+          <Card className="shadow-sm border">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold">GST Audit Ledger</CardTitle>
+                <CardDescription>Consolidated reporting transactions summary for filing</CardDescription>
+              </div>
+              <Button onClick={handleExportGst} variant="outline" size="sm" className="no-print gap-1.5 cursor-pointer">
+                <Download className="h-4 w-4" />
+                Export CSV
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Invoice #</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Client / Vendor</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Grand Total</TableHead>
+                    <TableHead>GST Tax Group</TableHead>
+                    <TableHead className="text-right">Accumulated Base (INR)</TableHead>
+                    <TableHead className="text-right">CGST Total</TableHead>
+                    <TableHead className="text-right">SGST Total</TableHead>
+                    <TableHead className="text-right">IGST Total</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {reportData.recentInvoices.map((inv) => (
-                    <TableRow key={inv.id} className="hover:bg-muted/30">
-                      <TableCell className="font-mono font-medium text-foreground">
-                        {inv.invoiceNumber}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {new Date(inv.invoiceDate).toLocaleDateString("en-IN", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        {inv.customerName || <span className="text-muted-foreground/60">Walk-in Client</span>}
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className={cn(
-                            "inline-flex items-center rounded px-2 py-0.5 text-xs font-medium",
-                            inv.type === "sales"
-                              ? "bg-blue-500/10 text-blue-700 dark:text-blue-400"
-                              : "bg-purple-500/10 text-purple-700 dark:text-purple-400"
-                          )}
-                        >
-                          {inv.type.toUpperCase()}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className={cn(
-                            "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold font-mono",
-                            inv.status === "paid" && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-                            inv.status === "partially_paid" && "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-                            inv.status === "draft" && "bg-slate-500/10 text-slate-700 dark:text-slate-400",
-                            (inv.status === "cancelled" || inv.status === "void") && "bg-destructive/10 text-destructive"
-                          )}
-                        >
-                          {inv.status.replace("_", " ")}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right font-mono font-semibold text-foreground">
-                        {formatINR(inv.grandTotal)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  <TableRow>
+                    <TableCell className="font-semibold">Domestic Sales (3% GST)</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(reportData.summary.salesTotal)}</TableCell>
+                    <TableCell className="text-right font-mono text-amber-600 font-medium">{formatINR(reportData.summary.cgstTotal)}</TableCell>
+                    <TableCell className="text-right font-mono text-amber-600 font-medium">{formatINR(reportData.summary.sgstTotal)}</TableCell>
+                    <TableCell className="text-right font-mono text-amber-600 font-medium">{formatINR(reportData.summary.igstTotal)}</TableCell>
+                  </TableRow>
                 </TableBody>
               </Table>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <FileText className="h-10 w-10 text-muted-foreground/35 mb-2" />
-                <p className="font-medium">No invoices registered in this date range</p>
-                <p className="text-xs">Adjust your date range filters to view older logs.</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {activeTab === "inventory" && (
+          <Card className="shadow-sm border">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold">Active Inventory Valuation</CardTitle>
+                <CardDescription>Aggregated metrics of active and in-stock catalogue items</CardDescription>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              {canReadCost && (
+                <Button onClick={handleExportInventory} variant="outline" size="sm" className="no-print gap-1.5 cursor-pointer">
+                  <Download className="h-4 w-4" />
+                  Export CSV
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Stock Metric</TableHead>
+                    <TableHead className="text-right">Value / Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell className="font-medium">Total Quantity In Stock</TableCell>
+                    <TableCell className="text-right font-mono">{reportData.inventory.inStockCount} pcs</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">Total Gross Weight</TableCell>
+                    <TableCell className="text-right font-mono">{formatWeight(reportData.inventory.inStockGrossWeight)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">Total Net Weight</TableCell>
+                    <TableCell className="text-right font-mono">{formatWeight(reportData.inventory.inStockNetWeight)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">Valuation Cost Price</TableCell>
+                    <TableCell className="text-right font-mono font-semibold">
+                      {canReadCost ? formatINR(reportData.inventory.inStockCostPrice) : "[Restricted]"}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

@@ -28,10 +28,13 @@ A production-grade, multi-tenant Enterprise Resource Planning system built for j
 | **Base Setup** | Foundations, Database Schema, Auth wiring, UI Shell | ✅ Complete |
 | **Phase 1** | Multi-Tenancy, RBAC Engine, User Invitations | ✅ Complete |
 | **Phase 2** | Master Data APIs (Customers, Suppliers, Assets, Inventory) | ✅ Complete |
+| **Phase 3** | Invoices, Payments & GST Reports | ✅ Complete |
+| **Phase 4** | Metal Rates, Dashboard Analytics & Reporting | ✅ Complete |
 | **Refactoring Phase 1** | Server-side Query Segregation (Data Access Layer) | ✅ Complete |
 | **Refactoring Phase 2** | Next.js Server Components Migration with SearchParams | ✅ Complete |
 | **Refactoring Phase 3** | Custom React Query Hooks & useEffect Clean-up | ✅ Complete |
 | **Performance & Caching** | React `"use cache"` & Cache Tag Invalidation | ✅ Complete |
+| **Developer Tooling** | Standalone Tenant Provisioning Script (`scripts/create-business.ts`) | ✅ Complete |
 
 ---
 
@@ -51,7 +54,6 @@ All Prisma queries are segregated into `lib/db/queries/*.ts` files with `"server
 - Server Components query the database directly during server rendering and pass the results to wrappers as `initialData`. This results in **zero loading latency** for initial render while preserving React Query's mutation cache-invalidation benefits.
 - All client state modifications utilize centralized query/mutation hooks (`lib/query/hooks/`), invalidating appropriate cache tags on mutation successes to guarantee consistent UI updates.
 
-
 ---
 
 ## Architecture Overview
@@ -59,58 +61,78 @@ All Prisma queries are segregated into `lib/db/queries/*.ts` files with `"server
 ```
 jewellery-erp/
 ├── app/
-│   ├── (app)/                  # Protected application routes
-│   │   ├── dashboard/          # Main dashboard page
-│   │   ├── customers/          # Customer management UI
-│   │   ├── suppliers/          # Supplier management UI
-│   │   ├── inventory/          # Inventory management UI
+│   ├── (app)/                    # Protected application routes
+│   │   ├── dashboard/            # Analytics dashboard
+│   │   ├── customers/            # Customer management UI
+│   │   ├── suppliers/            # Supplier management UI
+│   │   ├── inventory/            # Inventory management UI
+│   │   ├── invoices/             # Invoice list, creation & detail
+│   │   │   ├── new/              # New invoice form
+│   │   │   └── [id]/             # Invoice detail & payment recording
+│   │   ├── reports/              # GST & financial reports
 │   │   └── settings/
-│   │       └── users/          # Team & roles management UI
-│   ├── (auth)/                 # Public auth routes
+│   │       ├── business/         # Business profile & GST settings
+│   │       ├── metal-rates/      # Daily gold/silver rate management
+│   │       └── users/            # Team & roles management UI
+│   ├── (auth)/                   # Public auth routes
 │   │   ├── login/
 │   │   ├── sign-up/
-│   │   ├── invite/[token]/     # Invitation acceptance page
-│   │   └── select-tenant/      # Multi-business selector & onboarding
+│   │   ├── invite/[token]/       # Invitation acceptance page
+│   │   └── select-tenant/        # Multi-business selector & onboarding
 │   └── api/
-│       ├── auth/               # Neon Auth route handler
-│       └── v1/                 # REST API (all tenant-scoped)
+│       ├── auth/                 # Neon Auth route handler
+│       └── v1/                   # REST API (all tenant-scoped)
 │           ├── assets/
 │           ├── customers/
+│           ├── dashboard/
 │           ├── inventory/
+│           ├── invoices/
+│           ├── metal-rates/
 │           ├── settings/
 │           └── suppliers/
 ├── components/
-│   ├── app/                    # App shell (AppSidebar, Topbar)
-│   ├── auth/                   # Auth UI components
-│   ├── rbac/                   # <Can> server gate component
-│   └── ui/                     # shadcn/ui primitives
+│   ├── app/                      # App shell (AppSidebar, Topbar)
+│   ├── auth/                     # Auth UI components
+│   ├── rbac/                     # <Can> server gate component
+│   └── ui/                       # shadcn/ui primitives
 ├── lib/
-│   ├── db.ts                   # Prisma client + tenant-scoped interceptor
+│   ├── db.ts                     # Prisma client + tenant-scoped interceptor
 │   ├── db/
-│   │   ├── tenant-context.ts   # AsyncLocalStorage tenant context
-│   │   └── tenant-scope.ts     # Tenant repository wrapper
+│   │   ├── tenant-context.ts     # AsyncLocalStorage tenant context
+│   │   ├── tenant-scope.ts       # Tenant repository wrapper
+│   │   └── queries/              # Server-only DAL query functions
+│   │       ├── customers.ts
+│   │       ├── suppliers.ts
+│   │       ├── dashboard.ts
+│   │       ├── reports.ts
+│   │       ├── members.ts
+│   │       └── user.ts
 │   ├── auth/
-│   │   ├── session.ts          # Session validation & tenant membership
-│   │   └── with-tenant.ts      # RSC/Server Action wrapper
+│   │   ├── session.ts            # Session validation & tenant membership
+│   │   └── with-tenant.ts        # RSC/Server Action wrapper
 │   ├── rbac/
-│   │   ├── permissions.ts      # Permission resolution with request-scope cache
-│   │   ├── authorize.ts        # Deny-by-default guard
-│   │   └── seed-tenant-roles.ts # Default role provisioning
+│   │   ├── permissions.ts        # Permission resolution with request-scope cache
+│   │   ├── authorize.ts          # Deny-by-default guard
+│   │   └── seed-tenant-roles.ts  # Default role provisioning
 │   ├── billing/
-│   │   └── entitlements.ts     # Subscription plan limit checks
+│   │   └── entitlements.ts       # Subscription plan limit checks
 │   ├── tenants/
-│   │   └── onboard.ts          # Atomic tenant onboarding transaction
-│   ├── stores/                 # Zustand stores (ui, tenant, bill-draft)
-│   ├── query/                  # TanStack Query client & key factories
-│   └── format.ts               # Indian rupee & weight formatters
+│   │   └── onboard.ts            # Atomic tenant onboarding transaction
+│   ├── stores/                   # Zustand stores (ui, tenant, bill-draft)
+│   ├── query/                    # TanStack Query client & key factories
+│   └── format.ts                 # Indian rupee & weight formatters
+├── scripts/
+│   └── create-business.ts        # Standalone developer script to provision tenants
 ├── prisma/
-│   ├── schema.prisma           # 29-model schema
-│   ├── seed.ts                 # Idempotent seed (permissions, plans, HSN)
-│   └── migrations/             # SQL migrations
+│   ├── schema.prisma             # 29-model schema
+│   ├── seed.ts                   # Idempotent seed (permissions, plans, HSN)
+│   └── migrations/               # SQL migrations
 └── tests/
-    ├── isolation.test.ts       # Cross-tenant isolation tests
-    ├── rbac.test.ts            # RBAC & authorization tests
-    └── phase2.test.ts          # Master data & operations integration tests
+    ├── isolation.test.ts         # Cross-tenant isolation tests
+    ├── rbac.test.ts              # RBAC & authorization tests
+    ├── phase2.test.ts            # Master data & operations integration tests
+    ├── phase3.test.ts            # Invoice, payment & GST report tests
+    └── phase4.test.ts            # Metal rates, dashboard & reporting tests
 ```
 
 ---
@@ -121,12 +143,30 @@ jewellery-erp/
 - Every database query is automatically scoped to the active tenant via a Prisma query-level interceptor (`lib/db.ts`).
 - `AsyncLocalStorage` (`lib/db/tenant-context.ts`) propagates `tenantId`, `userId`, and `isSuperAdmin` transparently across the request lifecycle without prop drilling.
 - Cross-tenant data spoofing is rejected at the interceptor level.
+- `isSuperAdmin` flag bypasses tenant scoping for developer/platform maintenance.
 
 ### Role-Based Access Control (RBAC)
 - Five default system roles provisioned per tenant: **Owner**, **Manager**, **Cashier**, **Inventory Manager**, **Accountant**.
 - Permissions are granular (e.g. `customer:read`, `inventory:adjust`, `invoice:cancel`) and resolved with a request-scoped cache.
 - `authorize()` guard is deny-by-default — it validates session, tenant membership, permissions, and plan entitlements in one call.
 - `<Can permission="...">` server component gates UI sections without client-side logic.
+
+### Invoicing & Billing
+- Full invoice lifecycle: Draft → Issued → Partially Paid → Paid → Cancelled/Void.
+- Invoice types: Sales, Purchase, Quotation, Estimate, Return, Exchange, Repair.
+- Payment methods: Cash, Card, UPI, Bank Transfer, Cheque, Store Credit, Gold Exchange.
+- GST-compliant invoice structure with CGST/SGST/IGST breakdown and HSN codes.
+- Auto-incrementing invoice numbering per tenant with configurable prefix.
+
+### Metal Rates & Pricing
+- Daily gold, silver, and platinum rate management.
+- Rates feed directly into inventory valuation and invoice line-item calculations.
+- Metal rate history tracked per tenant.
+
+### Reports & Analytics
+- Dashboard with revenue, invoice, and inventory KPIs.
+- GST report generation scoped to financial year and date range.
+- Business analytics with payment method breakdown and metal-type summaries.
 
 ### User Management & Invitations
 - Staff can be invited by email token, assigned/revoked roles, and deactivated.
@@ -198,6 +238,51 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
+## Developer Tooling — Tenant Provisioning
+
+As the platform operator (developer/super-admin), you create business accounts on behalf of clients using the standalone provisioning script. This script bypasses Next.js server-only modules and runs directly against the database.
+
+### How to create a business
+
+1. **Create the user in Neon Auth** — go to your Neon Auth console, create the user account with their email and a temporary password. Copy the `authUserId`.
+
+2. **Edit `scripts/create-business.ts`** — update the `CONFIG` block:
+
+```typescript
+const CONFIG = {
+  authUserId: "neon-auth-user-id",   // from Neon Auth console
+  email: "owner@business.com",
+  ownerName: "Owner Full Name",
+  businessName: "Business Name",
+} as const;
+```
+
+3. **Run the script:**
+
+```bash
+npx tsx scripts/create-business.ts
+```
+
+The script atomically:
+- Creates the user projection in the database
+- Creates the Tenant record with a unique slug
+- Sets up default `BusinessSetting` (INR, 3% GST, per-gram making charge)
+- Seeds all 5 system roles with their permissions
+- Creates the membership and assigns the **Business Owner** role
+- Writes audit logs
+
+4. **Share credentials** with the business owner. They log in at `/login` → select their business → fill in GST details at `/settings/business` → start billing.
+
+### Set yourself as Super Admin
+
+Super admins bypass all tenant scoping (useful for platform maintenance). Run once in your Neon SQL Editor:
+
+```sql
+UPDATE "User" SET is_super_admin = true WHERE email = 'your@email.com';
+```
+
+---
+
 ## Available Scripts
 
 | Script | Description |
@@ -211,6 +296,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `pnpm db:migrate` | Deploy pending migrations (production) |
 | `pnpm db:migrate:dev` | Create and apply a new migration (development) |
 | `pnpm db:seed` | Run the idempotent database seed |
+| `npx tsx scripts/create-business.ts` | Provision a new business tenant (developer tool) |
 
 ---
 
@@ -227,6 +313,8 @@ pnpm test
 | `tests/isolation.test.ts` | Confirms complete data isolation between different tenants |
 | `tests/rbac.test.ts` | Permission checks, authorize guards, last-owner protection |
 | `tests/phase2.test.ts` | Master data APIs: customers, suppliers, assets, inventory |
+| `tests/phase3.test.ts` | Invoice lifecycle, payment recording, GST report generation |
+| `tests/phase4.test.ts` | Metal rates, dashboard analytics, financial reporting |
 
 ---
 
@@ -253,7 +341,22 @@ All routes are under `/api/v1/` and are tenant-scoped. A valid Neon Auth session
 | `/api/v1/suppliers/[id]` | `GET`, `PUT`, `DELETE` | Read, update, delete a supplier |
 | `/api/v1/assets` | `GET`, `POST` | List and create jewellery assets |
 | `/api/v1/inventory` | `GET`, `POST` | List and create inventory entries |
+| `/api/v1/invoices` | `GET`, `POST` | List and create invoices |
+| `/api/v1/invoices/[id]` | `GET`, `PUT`, `DELETE` | Read, update, cancel an invoice |
+| `/api/v1/metal-rates` | `GET`, `POST` | List and set daily metal rates |
+| `/api/v1/dashboard` | `GET` | Dashboard KPIs and analytics summary |
 | `/api/v1/settings` | `GET`, `PUT` | Read and update business settings |
+
+---
+
+## Roadmap — Next Phase
+
+| Feature | Description | Status |
+|---|---|---|
+| **Admin Portal** | `/admin` super-admin dashboard to create & manage businesses | 🔜 Planned |
+| **Email Notifications** | Automated welcome emails when provisioning new tenants | 🔜 Planned |
+| **Invoice PDF Export** | Generate GST-compliant PDF invoices for download/print | 🔜 Planned |
+| **WhatsApp Integration** | Send invoice links directly to customers via WhatsApp | 🔜 Planned |
 
 ---
 

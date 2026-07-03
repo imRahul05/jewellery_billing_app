@@ -2,29 +2,14 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { qk } from "@/lib/query/keys";
+import { dashboardApi } from "@/lib/api/dashboard.api";
+import type { DashboardData } from "@/lib/db/queries/dashboard";
 
-/**
- * Sample server-state hook. Components consume hooks like this — they never
- * call fetch/Prisma directly on the client.
- *
- * The billing/reporting endpoints don't exist yet (later phases); this returns
- * a typed placeholder so the Query wiring is exercised end-to-end today.
- */
-export interface DashboardStats {
-  todaysSales: number;
-  outstanding: number;
-  stockValue: number;
-  lowStockCount: number;
-}
+export type { DashboardData };
 
-async function fetchDashboardStats(): Promise<DashboardStats> {
-  // TODO(billing/reports phase): replace with real API call.
-  return {
-    todaysSales: 0,
-    outstanding: 0,
-    stockValue: 0,
-    lowStockCount: 0,
-  };
+async function fetchDashboardStats(): Promise<DashboardData> {
+  const res = await dashboardApi.getStats();
+  return res.data;
 }
 
 export function useDashboardStats(tenantId: string) {
@@ -34,3 +19,4 @@ export function useDashboardStats(tenantId: string) {
     enabled: Boolean(tenantId),
   });
 }
+
