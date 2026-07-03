@@ -4,6 +4,8 @@ import { runWithTenant } from "@/lib/db/tenant-context";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { Prisma, type Supplier } from "@prisma/client";
+import { revalidateTag } from "next/cache";
+
 
 export interface SerializedSupplier extends Omit<Supplier, "openingBalance"> {
   openingBalance: string;
@@ -77,6 +79,8 @@ export async function POST(request: Request): Promise<NextResponse> {
           openingBalance: input.openingBalance ?? new Prisma.Decimal(0.0),
         },
       });
+
+      revalidateTag(`suppliers-${session.tenantId}`, { expire: 0 });
 
       return NextResponse.json({ data: serializeSupplier(supplier) });
     });

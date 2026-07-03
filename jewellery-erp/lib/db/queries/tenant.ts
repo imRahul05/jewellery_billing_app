@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db";
+import { cacheLife, cacheTag } from "next/cache";
 
 export interface TenantSummary {
   id: string;
@@ -11,6 +12,10 @@ export interface TenantSummary {
  * Excludes soft-deleted and inactive tenants.
  */
 export async function getTenantByIdQuery(tenantId: string): Promise<TenantSummary> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(`tenant-${tenantId}`);
+
   return prisma.tenant.findFirstOrThrow({
     where: {
       id: tenantId,
@@ -23,3 +28,4 @@ export async function getTenantByIdQuery(tenantId: string): Promise<TenantSummar
     },
   });
 }
+

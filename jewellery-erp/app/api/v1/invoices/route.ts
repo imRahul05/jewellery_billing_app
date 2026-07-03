@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { InvoiceCreateSchema } from "@/lib/billing/validation";
 import { calculateInvoice, type LineItemInput } from "@/lib/billing/calculator";
 import { Prisma, Invoice, InvoiceLineItem, MetalType, InvoiceStatus, InvoiceType } from "@prisma/client";
+import { revalidateTag } from "next/cache";
+
 
 export interface SerializedInvoiceLineItem {
   id: string;
@@ -336,6 +338,8 @@ export async function POST(request: Request): Promise<NextResponse> {
 
         return inv;
       });
+
+      revalidateTag(`reports-${session.tenantId}`, { expire: 0 });
 
       return NextResponse.json({ data: serializeInvoice(invoice) }, { status: 201 });
     });

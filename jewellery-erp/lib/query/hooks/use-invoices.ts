@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { qk } from "@/lib/query/keys";
 import { invoiceApi, InvoiceCreateInput, PaymentCreateInput, ReturnInvoiceInput } from "@/lib/api/invoices.api";
+import { useRouter } from "next/navigation";
 
 export function useInvoices(
   tenantId: string,
@@ -31,6 +32,7 @@ export function useInvoiceDetail(tenantId: string, id: string) {
 
 export function useCreateInvoice(tenantId: string) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   return useMutation({
     mutationFn: async (data: InvoiceCreateInput) => {
       const res = await invoiceApi.createInvoice(data);
@@ -38,12 +40,14 @@ export function useCreateInvoice(tenantId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.invoices.all(tenantId) });
+      router.refresh();
     },
   });
 }
 
 export function useFinalizeInvoice(tenantId: string) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   return useMutation({
     mutationFn: async (id: string) => {
       const res = await invoiceApi.finalizeInvoice(id);
@@ -52,12 +56,14 @@ export function useFinalizeInvoice(tenantId: string) {
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: qk.invoices.detail(tenantId, id) });
       queryClient.invalidateQueries({ queryKey: qk.invoices.all(tenantId) });
+      router.refresh();
     },
   });
 }
 
 export function useCancelInvoice(tenantId: string) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   return useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
       const res = await invoiceApi.cancelInvoice(id, reason);
@@ -66,12 +72,14 @@ export function useCancelInvoice(tenantId: string) {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: qk.invoices.detail(tenantId, id) });
       queryClient.invalidateQueries({ queryKey: qk.invoices.all(tenantId) });
+      router.refresh();
     },
   });
 }
 
 export function useRecordPayment(tenantId: string) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: PaymentCreateInput }) => {
       const res = await invoiceApi.createPayment(id, data);
@@ -81,12 +89,14 @@ export function useRecordPayment(tenantId: string) {
       queryClient.invalidateQueries({ queryKey: qk.invoices.detail(tenantId, id) });
       queryClient.invalidateQueries({ queryKey: qk.invoices.all(tenantId) });
       queryClient.invalidateQueries({ queryKey: qk.customers.all(tenantId) });
+      router.refresh();
     },
   });
 }
 
 export function useProcessReturn(tenantId: string) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: ReturnInvoiceInput }) => {
       const res = await invoiceApi.createReturn(id, data);
@@ -95,6 +105,8 @@ export function useProcessReturn(tenantId: string) {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: qk.invoices.detail(tenantId, id) });
       queryClient.invalidateQueries({ queryKey: qk.invoices.all(tenantId) });
+      router.refresh();
     },
   });
 }
+

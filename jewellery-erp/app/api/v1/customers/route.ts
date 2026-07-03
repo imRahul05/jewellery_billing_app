@@ -4,6 +4,8 @@ import { runWithTenant } from "@/lib/db/tenant-context";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { Prisma, type Customer } from "@prisma/client";
+import { revalidateTag } from "next/cache";
+
 
 export interface SerializedCustomer extends Omit<Customer, "openingBalance"> {
   openingBalance: string;
@@ -97,6 +99,8 @@ export async function POST(request: Request): Promise<NextResponse> {
           notes: input.notes || null,
         },
       });
+
+      revalidateTag(`customers-${session.tenantId}`, { expire: 0 });
 
       return NextResponse.json({ data: serializeCustomer(customer) });
     });

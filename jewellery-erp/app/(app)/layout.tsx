@@ -7,7 +7,6 @@ import { AppSidebar } from "@/components/app/app-sidebar";
 import { TenantHydrator } from "@/components/app/tenant-hydrator";
 import { Topbar } from "@/components/app/topbar";
 
-export const dynamic = "force-dynamic";
 export default async function ApplicationLayout({ children }: { children: React.ReactNode }) {
   const session = await requireSession();
   // Bind tenant context for this layout's own loads. Note: AsyncLocalStorage

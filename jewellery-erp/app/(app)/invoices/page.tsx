@@ -3,8 +3,6 @@ import { authorize } from "@/lib/rbac/authorize";
 import { getInvoicesQuery } from "@/lib/db/queries/invoices";
 import { InvoicesClientWrapper, type SerializedInvoice } from "./_components/invoices-client-wrapper";
 
-export const dynamic = "force-dynamic";
-
 interface InvoicesPageProps {
   searchParams: Promise<{
     status?: string;

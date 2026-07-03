@@ -3,8 +3,6 @@ import { authorize } from "@/lib/rbac/authorize";
 import { getCustomersQuery } from "@/lib/db/queries/customers";
 import { CustomersClientWrapper, type SerializedCustomer } from "./_components/customers-client-wrapper";
 
-export const dynamic = "force-dynamic";
-
 interface CustomersPageProps {
   searchParams: Promise<{
     search?: string;

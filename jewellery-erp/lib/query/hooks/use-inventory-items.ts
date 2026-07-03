@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { qk } from "@/lib/query/keys";
 import { inventoryApi, InventoryItemInput } from "@/lib/api/inventory.api";
 import axios from "axios";
+import { useRouter } from "next/navigation";
 
 export function useInventoryItems(
   tenantId: string,
@@ -43,6 +44,7 @@ export function useItemMovements(tenantId: string, id: string) {
 
 export function useCreateInventoryItem(tenantId: string) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   return useMutation({
     mutationFn: async (data: InventoryItemInput) => {
       const res = await inventoryApi.createInventoryItem(data);
@@ -50,6 +52,7 @@ export function useCreateInventoryItem(tenantId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.inventory.all(tenantId) });
+      router.refresh();
     },
   });
 }

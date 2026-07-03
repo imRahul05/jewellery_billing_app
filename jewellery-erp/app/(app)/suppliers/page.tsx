@@ -3,8 +3,6 @@ import { authorize } from "@/lib/rbac/authorize";
 import { getSuppliersQuery } from "@/lib/db/queries/suppliers";
 import { SuppliersClientWrapper, type SerializedSupplier } from "./_components/suppliers-client-wrapper";
 
-export const dynamic = "force-dynamic";
-
 interface SuppliersPageProps {
   searchParams: Promise<{
     search?: string;

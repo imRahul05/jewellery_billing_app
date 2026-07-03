@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { qk } from "@/lib/query/keys";
 import { customerApi, CustomerInput } from "@/lib/api/customer.api";
+import { useRouter } from "next/navigation";
 
 export function useCustomers(tenantId: string, filters?: { search?: string }) {
   return useQuery({
@@ -39,6 +40,7 @@ export function useCustomerLedger(tenantId: string, id: string) {
 
 export function useCreateCustomer(tenantId: string) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   return useMutation({
     mutationFn: async (data: CustomerInput) => {
       const res = await customerApi.createCustomer(data);
@@ -46,12 +48,14 @@ export function useCreateCustomer(tenantId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.customers.all(tenantId) });
+      router.refresh();
     },
   });
 }
 
 export function useUpdateCustomer(tenantId: string, id: string) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   return useMutation({
     mutationFn: async (data: Partial<CustomerInput>) => {
       const res = await customerApi.updateCustomer(id, data);
@@ -60,12 +64,14 @@ export function useUpdateCustomer(tenantId: string, id: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.customers.detail(tenantId, id) });
       queryClient.invalidateQueries({ queryKey: qk.customers.all(tenantId) });
+      router.refresh();
     },
   });
 }
 
 export function useDeleteCustomer(tenantId: string, id: string) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   return useMutation({
     mutationFn: async () => {
       const res = await customerApi.deleteCustomer(id);
@@ -73,6 +79,8 @@ export function useDeleteCustomer(tenantId: string, id: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.customers.all(tenantId) });
+      router.refresh();
     },
   });
 }
+

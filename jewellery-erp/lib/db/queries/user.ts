@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db";
+import { cacheLife, cacheTag } from "next/cache";
 
 export interface UserSummary {
   fullName: string | null;
@@ -15,6 +16,10 @@ export interface UserOnboardSummary {
  * Retrieves a user profile by their database user ID.
  */
 export async function getUserByIdQuery(userId: string): Promise<UserSummary> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(`user-${userId}`);
+
   return prisma.user.findUniqueOrThrow({
     where: { id: userId },
     select: {
@@ -23,6 +28,7 @@ export async function getUserByIdQuery(userId: string): Promise<UserSummary> {
     },
   });
 }
+
 
 /**
  * Retrieves a user profile by their auth service ID.

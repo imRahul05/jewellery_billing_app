@@ -8,8 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { onboardBusinessAction, selectTenantAction } from "./actions";
 
-export const dynamic = "force-dynamic";
-
 export default async function SelectTenantPage() {
   const { data: session } = await auth.getSession();
   if (!session?.user) {

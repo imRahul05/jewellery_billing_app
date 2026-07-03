@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { serializeCustomer } from "../route";
+import { revalidateTag } from "next/cache";
+
 
 const CustomerUpdateSchema = z.object({
   name: z.string().min(1, "Name is required").optional(),
@@ -99,6 +101,8 @@ export async function PATCH(
         },
       });
 
+      revalidateTag(`customers-${session.tenantId}`, { expire: 0 });
+
       return NextResponse.json({ data: serializeCustomer(updated) });
     });
   } catch (err: unknown) {
@@ -137,6 +141,8 @@ export async function DELETE(
         where: { id: resolvedParams.id },
         data: { deletedAt: new Date() },
       });
+
+      revalidateTag(`customers-${session.tenantId}`, { expire: 0 });
 
       return NextResponse.json({ data: { success: true } });
     });
