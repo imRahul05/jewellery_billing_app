@@ -36,16 +36,25 @@ export async function requireSession(): Promise<Session> {
   if (!user) redirect("/select-tenant");
 
   const memberships = await prisma.userTenantMembership.findMany({
-    where: { userId: user.id, isActive: true },
+    where: {
+      userId: user.id,
+      isActive: true,
+      tenant: {
+        isActive: true,
+        deletedAt: null,
+      },
+    },
     select: { id: true, tenantId: true },
     orderBy: { createdAt: "asc" },
   });
 
-  if (memberships.length === 0) {
+  // For regular users, we require at least one active membership.
+  // For Super Admins, we do NOT force them to have a tenant membership.
+  if (memberships.length === 0 && !user.isSuperAdmin) {
     redirect("/select-tenant");
   }
 
-  let membership = memberships[0];
+  let membership = memberships[0] || null;
 
   if (memberships.length > 1) {
     const cookieStore = await cookies();
@@ -60,8 +69,22 @@ export async function requireSession(): Promise<Session> {
 
   return {
     userId: user.id,
-    tenantId: membership.tenantId,
-    membershipId: membership.id,
+    tenantId: membership?.tenantId ?? "",
+    membershipId: membership?.id ?? "",
     isSuperAdmin: user.isSuperAdmin,
   };
 }
+
+
+/**
+ * Require a session and verify the authenticated user is a Super Admin.
+ * Redirects non-super-admins to /dashboard.
+ */
+export async function requireSuperAdminSession(): Promise<Session> {
+  const session = await requireSession();
+  if (!session.isSuperAdmin) {
+    redirect("/dashboard");
+  }
+  return session;
+}
+

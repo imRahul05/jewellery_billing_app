@@ -12,17 +12,25 @@ interface TenantState {
   tenantId: string | null;
   tenantName: string | null;
   permissions: string[];
-  setTenant: (tenant: { id: string; name: string } | null, permissions?: string[]) => void;
+  isSuperAdmin: boolean;
+  setTenant: (
+    tenant: { id: string; name: string } | null,
+    permissions?: string[],
+    isSuperAdmin?: boolean
+  ) => void;
 }
 
 export const useTenantStore = create<TenantState>((set) => ({
   tenantId: null,
   tenantName: null,
   permissions: [],
-  setTenant: (tenant, permissions = []) =>
+  isSuperAdmin: false,
+  setTenant: (tenant, permissions = [], isSuperAdmin = false) =>
     set({
       tenantId: tenant?.id ?? null,
       tenantName: tenant?.name ?? null,
       permissions,
+      isSuperAdmin,
     }),
 }));
+

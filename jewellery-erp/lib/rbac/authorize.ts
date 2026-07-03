@@ -17,8 +17,14 @@ export class AuthorizationError extends Error {
 export async function authorize(permission: string): Promise<Session> {
   const session = await requireSession();
 
+  // Super Admin bypasses all checks
+  if (session.isSuperAdmin) {
+    return session;
+  }
+
   // Plan-gated permissions: even if granted by role, plan restrictions override
   await assertPlanAllows(session.tenantId, permission);
+
 
   const allowed = await hasPermission(
     { userId: session.userId, tenantId: session.tenantId },
