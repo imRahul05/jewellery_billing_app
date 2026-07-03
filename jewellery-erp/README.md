@@ -28,6 +28,29 @@ A production-grade, multi-tenant Enterprise Resource Planning system built for j
 | **Base Setup** | Foundations, Database Schema, Auth wiring, UI Shell | ✅ Complete |
 | **Phase 1** | Multi-Tenancy, RBAC Engine, User Invitations | ✅ Complete |
 | **Phase 2** | Master Data APIs (Customers, Suppliers, Assets, Inventory) | ✅ Complete |
+| **Refactoring Phase 1** | Server-side Query Segregation (Data Access Layer) | ✅ Complete |
+| **Refactoring Phase 2** | Next.js Server Components Migration with SearchParams | ✅ Complete |
+| **Refactoring Phase 3** | Custom React Query Hooks & useEffect Clean-up | ✅ Complete |
+| **Performance & Caching** | React `"use cache"` & Cache Tag Invalidation | ✅ Complete |
+
+---
+
+## App Router Caching & Data Flow
+
+Our architecture utilizes Next.js 16 App Router best practices, optimizing both data fetching latency and client interactivity:
+
+### 1. Server-Side Data Access Layer (DAL)
+All Prisma queries are segregated into `lib/db/queries/*.ts` files with `"server-only"` protection. Direct DB querying within Page files or Client Components is blocked.
+
+### 2. Next.js 16 Caching & Invalidation
+- **React `"use cache"`**: Integrated React's experimental `"use cache"`, `cacheLife`, and `cacheTag` directives into server-side queries (User, Tenant, Customer, Supplier lists).
+- **Dynamic Routing**: Removed `force-dynamic` directives from list pages to allow dynamic cache compilation, invalidating lists selectively when database mutations succeed.
+
+### 3. TanStack Query + Hybrid Data Hydration
+- Client wrappers (`_components/*-client-wrapper.tsx`) consume data from custom hooks.
+- Server Components query the database directly during server rendering and pass the results to wrappers as `initialData`. This results in **zero loading latency** for initial render while preserving React Query's mutation cache-invalidation benefits.
+- All client state modifications utilize centralized query/mutation hooks (`lib/query/hooks/`), invalidating appropriate cache tags on mutation successes to guarantee consistent UI updates.
+
 
 ---
 
