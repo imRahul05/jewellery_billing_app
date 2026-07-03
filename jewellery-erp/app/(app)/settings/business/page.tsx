@@ -194,7 +194,7 @@ export default function BusinessSettingsPage() {
                     <Input id="name" {...register("name")} />
                     {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Label htmlFor="gstin">GSTIN (Optional)</Label>
                       <Input id="gstin" placeholder="27AAAAA1111A1Z1" {...register("gstin")} />
@@ -226,7 +226,7 @@ export default function BusinessSettingsPage() {
                   <CardDescription>Configure billing sequences and regional settings.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Label htmlFor="invoicePrefix">Invoice Prefix</Label>
                       <Input id="invoicePrefix" {...register("invoicePrefix")} />
@@ -238,7 +238,7 @@ export default function BusinessSettingsPage() {
                       {errors.invoiceNextSeq && <p className="text-xs text-destructive">{errors.invoiceNextSeq.message}</p>}
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Select label="Base Currency" {...register("baseCurrency")}>
                         <option value="INR">INR (₹)</option>

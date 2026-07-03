@@ -79,7 +79,7 @@ export default function RegisterBusinessPage() {
   };
 
   return (
-    <div className="max-w-xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center gap-2">
         <Link href="/admin/businesses" passHref>
           <Button variant="ghost" size="icon">
@@ -91,118 +91,122 @@ export default function RegisterBusinessPage() {
 
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Register New Business</h1>
-        <p className="text-muted-foreground">
+        <p className="text-muted-foreground mt-1">
           Provision a brand new tenant store and set up its business owner credentials.
         </p>
       </div>
 
-      <Card>
+      <Card className="shadow-md border bg-card">
         <form onSubmit={handleSubmit}>
-          <CardHeader>
-            <CardTitle>Business Configuration</CardTitle>
-            <CardDescription>
+          <CardHeader className="border-b pb-6">
+            <CardTitle className="text-xl">Business Configuration</CardTitle>
+            <CardDescription className="text-sm mt-1">
               Complete the credentials below to onboard the new business.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Business Details */}
-            <div className="space-y-2">
-              <Label htmlFor="businessName">Business Name</Label>
-              <div className="relative">
-                <Building2 className="absolute left-3 top-3 size-4 text-muted-foreground" />
-                <Input
-                  id="businessName"
-                  placeholder="e.g. Shree Laxmi Jewellers"
-                  className="pl-9"
-                  value={formData.businessName}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, businessName: e.target.value }))}
-                />
+          <CardContent className="space-y-6 pt-6 pb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Business Details */}
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="businessName" className="text-sm font-semibold">Business Name</Label>
+                <div className="relative">
+                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                  <Input
+                    id="businessName"
+                    placeholder="e.g. Shree Laxmi Jewellers"
+                    className="pl-9"
+                    value={formData.businessName}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, businessName: e.target.value }))}
+                  />
+                </div>
+                {errors.businessName && (
+                  <p className="text-xs font-medium text-red-600 dark:text-red-400">{errors.businessName}</p>
+                )}
               </div>
-              {errors.businessName && (
-                <p className="text-xs font-medium text-red-600 dark:text-red-400">{errors.businessName}</p>
-              )}
-            </div>
 
-            <div className="border-t my-4 pt-4">
-              <h3 className="text-sm font-semibold text-foreground mb-3">Owner Setup</h3>
-            </div>
+              {/* Section Divider */}
+              <div className="md:col-span-2 border-t pt-4 mt-2">
+                <h3 className="text-base font-semibold text-foreground">Owner Setup</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Primary administrative owner credentials.</p>
+              </div>
 
-            {/* Owner Name */}
-            <div className="space-y-2">
-              <Label htmlFor="ownerName">Owner Full Name</Label>
-              <div className="relative">
-                <User className="absolute left-3 top-3 size-4 text-muted-foreground" />
-                <Input
-                  id="ownerName"
-                  placeholder="e.g. Ramesh Gupta"
-                  className="pl-9"
-                  value={formData.ownerName}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, ownerName: e.target.value }))}
-                />
+              {/* Owner Name */}
+              <div className="space-y-2 col-span-1">
+                <Label htmlFor="ownerName" className="text-sm font-semibold">Owner Full Name</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                  <Input
+                    id="ownerName"
+                    placeholder="e.g. Ramesh Gupta"
+                    className="pl-9"
+                    value={formData.ownerName}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, ownerName: e.target.value }))}
+                  />
+                </div>
+                {errors.ownerName && (
+                  <p className="text-xs font-medium text-red-600 dark:text-red-400">{errors.ownerName}</p>
+                )}
               </div>
-              {errors.ownerName && (
-                <p className="text-xs font-medium text-red-600 dark:text-red-400">{errors.ownerName}</p>
-              )}
-            </div>
 
-            {/* Owner Email */}
-            <div className="space-y-2">
-              <Label htmlFor="ownerEmail">Owner Email Address</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 size-4 text-muted-foreground" />
-                <Input
-                  id="ownerEmail"
-                  type="email"
-                  placeholder="e.g. owner@jeweller.com"
-                  className="pl-9"
-                  value={formData.ownerEmail}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, ownerEmail: e.target.value }))}
-                />
+              {/* Owner Email */}
+              <div className="space-y-2 col-span-1">
+                <Label htmlFor="ownerEmail" className="text-sm font-semibold">Owner Email Address</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                  <Input
+                    id="ownerEmail"
+                    type="email"
+                    placeholder="e.g. owner@jeweller.com"
+                    className="pl-9"
+                    value={formData.ownerEmail}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, ownerEmail: e.target.value }))}
+                  />
+                </div>
+                {errors.ownerEmail && (
+                  <p className="text-xs font-medium text-red-600 dark:text-red-400">{errors.ownerEmail}</p>
+                )}
               </div>
-              {errors.ownerEmail && (
-                <p className="text-xs font-medium text-red-600 dark:text-red-400">{errors.ownerEmail}</p>
-              )}
-            </div>
 
-            {/* Password */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="ownerPassword">Initial Password</Label>
-                <Button
-                  type="button"
-                  variant="link"
-                  className="h-auto p-0 text-xs text-red-600 hover:text-red-700"
-                  onClick={generatePassword}
-                >
-                  Generate Password
-                </Button>
+              {/* Password */}
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="ownerPassword" className="text-sm font-semibold">Initial Password</Label>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                    <Input
+                      id="ownerPassword"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="At least 6 characters"
+                      className="pl-9 pr-10"
+                      value={formData.ownerPassword}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, ownerPassword: e.target.value }))}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                    >
+                      {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </Button>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="shrink-0"
+                    onClick={generatePassword}
+                  >
+                    Generate Password
+                  </Button>
+                </div>
+                {errors.ownerPassword && (
+                  <p className="text-xs font-medium text-destructive">{errors.ownerPassword}</p>
+                )}
               </div>
-              <div className="relative">
-                <KeyRound className="absolute left-3 top-3 size-4 text-muted-foreground" />
-                <Input
-                  id="ownerPassword"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="At least 6 characters"
-                  className="pl-9 pr-9"
-                  value={formData.ownerPassword}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, ownerPassword: e.target.value }))}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-10 w-10 hover:bg-transparent"
-                  onClick={() => setShowPassword((prev) => !prev)}
-                >
-                  {showPassword ? <EyeOff className="size-4 text-muted-foreground" /> : <Eye className="size-4 text-muted-foreground" />}
-                </Button>
-              </div>
-              {errors.ownerPassword && (
-                <p className="text-xs font-medium text-red-600 dark:text-red-400">{errors.ownerPassword}</p>
-              )}
             </div>
           </CardContent>
-          <CardFooter className="flex items-center justify-between border-t px-6 py-4">
+          <CardFooter className="flex items-center justify-between border-t px-6 py-4 bg-muted/20">
             <Link href="/admin/businesses" passHref>
               <Button type="button" variant="outline">
                 Cancel

@@ -50,6 +50,14 @@ export default function BusinessDetailPage({
         setTenant(res.data.tenant);
         setMemberships(res.data.memberships);
         setRoles(res.data.roles || []);
+        if (res.data.tenant) {
+          setEditName(res.data.tenant.name || "");
+          setEditSlug(res.data.tenant.slug || "");
+          setEditEmail(res.data.tenant.contactEmail || "");
+          setEditPhone(res.data.tenant.contactPhone || "");
+          setEditGstin(res.data.tenant.gstin || "");
+          setEditPan(res.data.tenant.pan || "");
+        }
       } catch (err: unknown) {
         console.error(err);
         toast.error("Failed to load business details");
@@ -60,8 +68,9 @@ export default function BusinessDetailPage({
     load();
   }, [id]);
 
-  useEffect(() => {
-    if (tenant) {
+  const handleEditOpenChange = (open: boolean) => {
+    setIsEditOpen(open);
+    if (open && tenant) {
       setEditName(tenant.name || "");
       setEditSlug(tenant.slug || "");
       setEditEmail(tenant.contactEmail || "");
@@ -69,7 +78,7 @@ export default function BusinessDetailPage({
       setEditGstin(tenant.gstin || "");
       setEditPan(tenant.pan || "");
     }
-  }, [tenant, isEditOpen]);
+  };
 
   const handleToggleStatus = async () => {
     if (!tenant) return;
@@ -106,6 +115,14 @@ export default function BusinessDetailPage({
         pan: editPan || null,
       });
       setTenant(res.data);
+      if (res.data) {
+        setEditName(res.data.name || "");
+        setEditSlug(res.data.slug || "");
+        setEditEmail(res.data.contactEmail || "");
+        setEditPhone(res.data.contactPhone || "");
+        setEditGstin(res.data.gstin || "");
+        setEditPan(res.data.pan || "");
+      }
       toast.success("Business details updated successfully!");
       setIsEditOpen(false);
     } catch (err: unknown) {
@@ -212,7 +229,7 @@ export default function BusinessDetailPage({
                   Registered corporate and operational contact profiles.
                 </CardDescription>
               </div>
-              <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+              <Dialog open={isEditOpen} onOpenChange={handleEditOpenChange}>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="sm">
                     <Edit className="size-4 mr-2" />
