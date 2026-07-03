@@ -3,8 +3,10 @@ import { prisma } from "@/lib/db";
 import { runWithTenant } from "@/lib/db/tenant-context";
 import { GET as getBusinessesRoute, POST as createBusinessRoute } from "@/app/api/v1/admin/businesses/route";
 import { GET as getBusinessDetailsRoute, PATCH as updateBusinessStatusRoute } from "@/app/api/v1/admin/businesses/[id]/route";
+import { POST as addMemberRoute } from "@/app/api/v1/admin/businesses/[id]/members/route";
 import { requireSession } from "@/lib/auth/session";
 import { revalidateTag } from "next/cache";
+import { seedTenantRoles } from "@/lib/rbac/seed-tenant-roles";
 
 // Mock next/cache so that it does not crash when called inside route handlers
 vi.mock("next/cache", () => {
@@ -59,6 +61,9 @@ describe("Admin Portal Integration Tests", () => {
       },
     });
     testTenantId = tenant.id;
+
+    // Seed roles for the baseline tenant
+    await seedTenantRoles(testTenantId);
 
     // 4. Create membership
     const membership = await prisma.userTenantMembership.create({
@@ -283,7 +288,112 @@ describe("Admin Portal Integration Tests", () => {
     expect(dbTenant.isActive).toBe(false);
 
     // Verify cache tag invalidation was triggered
-    expect(revalidateTag).toHaveBeenCalledWith(`tenant-${testTenantId}`);
+    expect(revalidateTag).toHaveBeenCalledWith(`tenant-${testTenantId}`, { expire: 0 });
+  }, 30000);
+
+  test("5. Detailed Business Modifications - Super Admin updates business details", async () => {
+    (requireSession as Mock).mockResolvedValueOnce({
+      userId: superAdminUserId,
+      tenantId: testTenantId,
+      membershipId: testMembershipId,
+      isSuperAdmin: true,
+    });
+
+    const paramsObj = Promise.resolve({ id: testTenantId });
+    const patchReq = new Request(`http://localhost:3000/api/v1/admin/businesses/${testTenantId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Updated Shree Laxmi Jewellers",
+        gstin: "22AAAAA0000A1Z5",
+        contactEmail: "updated-contact@laxmi.com",
+      }),
+    });
+
+    const patchRes = await updateBusinessStatusRoute(patchReq, { params: paramsObj });
+    expect(patchRes.status).toBe(200);
+
+    const patchBody = await patchRes.json();
+    expect(patchBody.data.name).toBe("Updated Shree Laxmi Jewellers");
+    expect(patchBody.data.gstin).toBe("22AAAAA0000A1Z5");
+    expect(patchBody.data.contactEmail).toBe("updated-contact@laxmi.com");
+
+    // Check database state
+    const dbTenant = await prisma.tenant.findUniqueOrThrow({
+      where: { id: testTenantId },
+    });
+    expect(dbTenant.name).toBe("Updated Shree Laxmi Jewellers");
+    expect(dbTenant.gstin).toBe("22AAAAA0000A1Z5");
+  }, 30000);
+
+  test("6. Add Staff Member - Super Admin adds member to business with role", async () => {
+    // 1. Fetch available role from the tenant database
+    const roles = await prisma.role.findMany({
+      where: { tenantId: testTenantId },
+    });
+    const managerRole = roles.find((r) => r.name === "Manager");
+    expect(managerRole).toBeDefined();
+
+    (requireSession as Mock).mockResolvedValueOnce({
+      userId: superAdminUserId,
+      tenantId: testTenantId,
+      membershipId: testMembershipId,
+      isSuperAdmin: true,
+    });
+
+    // Mock Neon Auth network call for signup
+    const globalFetch = global.fetch;
+    global.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ user: { id: "new-auth-user-id-123" } }),
+      }) as unknown as Promise<Response>
+    );
+
+    try {
+      const paramsObj = Promise.resolve({ id: testTenantId });
+      const postReq = new Request(`http://localhost:3000/api/v1/admin/businesses/${testTenantId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "manager.new@test.com",
+          fullName: "New Manager Staff",
+          roleId: managerRole!.id,
+          password: "password123",
+        }),
+      });
+
+      const postRes = await addMemberRoute(postReq, { params: paramsObj });
+      expect(postRes.status).toBe(200);
+
+      const postBody = await postRes.json();
+      expect(postBody.data.user.email).toBe("manager.new@test.com");
+      expect(postBody.data.user.fullName).toBe("New Manager Staff");
+      expect(postBody.data.roles).toContain("Manager");
+
+      // Verify DB record exists
+      const dbMembership = await prisma.userTenantMembership.findUnique({
+        where: {
+          tenantId_userId: {
+            tenantId: testTenantId,
+            userId: postBody.data.user.id,
+          },
+        },
+        include: {
+          userRoles: {
+            include: {
+              role: true,
+            },
+          },
+        },
+      });
+      expect(dbMembership).not.toBeNull();
+      expect(dbMembership!.isActive).toBe(true);
+      expect(dbMembership!.userRoles.some((ur) => ur.role.name === "Manager")).toBe(true);
+
+    } finally {
+      global.fetch = globalFetch;
+    }
   }, 30000);
 
 

@@ -2,11 +2,15 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { adminApi, type AdminMembership, type TenantDetails } from "@/lib/api/admin.api";
+import { adminApi, type AdminMembership, type TenantDetails, type AdminRole } from "@/lib/api/admin.api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, ArrowLeft, Building2, Calendar, CheckCircle2, Loader2, Mail, Phone, Shield, ShieldAlert, XCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { AlertTriangle, ArrowLeft, Building2, Calendar, CheckCircle2, Edit, Loader2, Mail, Phone, Plus, Shield, ShieldAlert, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 export default function BusinessDetailPage({
@@ -17,8 +21,27 @@ export default function BusinessDetailPage({
   const { id } = use(params);
   const [tenant, setTenant] = useState<TenantDetails | null>(null);
   const [memberships, setMemberships] = useState<AdminMembership[]>([]);
+  const [roles, setRoles] = useState<AdminRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+
+  // Edit Business Form States
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editSlug, setEditSlug] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editGstin, setEditGstin] = useState("");
+  const [editPan, setEditPan] = useState("");
+  const [isSavingDetails, setIsSavingDetails] = useState(false);
+
+  // Add Member Form States
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [memberFullName, setMemberFullName] = useState("");
+  const [memberEmail, setMemberEmail] = useState("");
+  const [memberRoleId, setMemberRoleId] = useState("");
+  const [memberPassword, setMemberPassword] = useState("");
+  const [isAddingMember, setIsAddingMember] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -26,6 +49,7 @@ export default function BusinessDetailPage({
         const res = await adminApi.getBusiness(id);
         setTenant(res.data.tenant);
         setMemberships(res.data.memberships);
+        setRoles(res.data.roles || []);
       } catch (err: unknown) {
         console.error(err);
         toast.error("Failed to load business details");
@@ -35,6 +59,17 @@ export default function BusinessDetailPage({
     }
     load();
   }, [id]);
+
+  useEffect(() => {
+    if (tenant) {
+      setEditName(tenant.name || "");
+      setEditSlug(tenant.slug || "");
+      setEditEmail(tenant.contactEmail || "");
+      setEditPhone(tenant.contactPhone || "");
+      setEditGstin(tenant.gstin || "");
+      setEditPan(tenant.pan || "");
+    }
+  }, [tenant, isEditOpen]);
 
   const handleToggleStatus = async () => {
     if (!tenant) return;
@@ -54,6 +89,60 @@ export default function BusinessDetailPage({
       toast.error("Failed to update business status");
     } finally {
       setIsTogglingStatus(false);
+    }
+  };
+
+  const handleSaveDetails = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!tenant) return;
+    setIsSavingDetails(true);
+    try {
+      const res = await adminApi.updateBusiness(id, {
+        name: editName,
+        slug: editSlug,
+        contactEmail: editEmail || null,
+        contactPhone: editPhone || null,
+        gstin: editGstin || null,
+        pan: editPan || null,
+      });
+      setTenant(res.data);
+      toast.success("Business details updated successfully!");
+      setIsEditOpen(false);
+    } catch (err: unknown) {
+      console.error(err);
+      toast.error("Failed to update business details");
+    } finally {
+      setIsSavingDetails(false);
+    }
+  };
+
+  const handleAddMember = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!memberRoleId) {
+      toast.error("Please select a role");
+      return;
+    }
+    setIsAddingMember(true);
+    try {
+      const res = await adminApi.addBusinessMember(id, {
+        fullName: memberFullName,
+        email: memberEmail,
+        roleId: memberRoleId,
+        password: memberPassword || undefined,
+      });
+      setMemberships((prev) => [...prev, res.data]);
+      toast.success("Staff member added successfully!");
+      setIsAddMemberOpen(false);
+      // Reset form
+      setMemberFullName("");
+      setMemberEmail("");
+      setMemberRoleId("");
+      setMemberPassword("");
+    } catch (err: unknown) {
+      console.error(err);
+      toast.error("Failed to add staff member");
+    } finally {
+      setIsAddingMember(false);
     }
   };
 
@@ -116,11 +205,93 @@ export default function BusinessDetailPage({
         {/* Left Column: Business Metadata */}
         <div className="md:col-span-2 space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Business Overview</CardTitle>
-              <CardDescription>
-                Registered corporate and operational contact profiles.
-              </CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle>Business Overview</CardTitle>
+                <CardDescription>
+                  Registered corporate and operational contact profiles.
+                </CardDescription>
+              </div>
+              <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Edit className="size-4 mr-2" />
+                    Edit Details
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                  <form onSubmit={handleSaveDetails}>
+                    <DialogHeader>
+                      <DialogTitle>Edit Business Details</DialogTitle>
+                      <DialogDescription>
+                        Update the corporate and operational details for this business.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit-name">Business Name</Label>
+                        <Input
+                          id="edit-name"
+                          value={editName}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditName(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit-slug">Slug Name</Label>
+                        <Input
+                          id="edit-slug"
+                          value={editSlug}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditSlug(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit-email">Contact Email</Label>
+                        <Input
+                          id="edit-email"
+                          type="email"
+                          value={editEmail}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEmail(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit-phone">Contact Phone</Label>
+                        <Input
+                          id="edit-phone"
+                          value={editPhone}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditPhone(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit-gstin">GSTIN / Tax ID</Label>
+                        <Input
+                          id="edit-gstin"
+                          value={editGstin}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditGstin(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="edit-pan">PAN ID</Label>
+                        <Input
+                          id="edit-pan"
+                          value={editPan}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditPan(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button type="button" variant="ghost" onClick={() => setIsEditOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={isSavingDetails}>
+                        {isSavingDetails && <Loader2 className="size-4 animate-spin mr-2" />}
+                        Save Changes
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <div className="flex items-start gap-3">
@@ -171,12 +342,92 @@ export default function BusinessDetailPage({
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Members & Staff</CardTitle>
-              <CardDescription>
-                Active staff accounts associated with this tenant&apos;s directory.
-              </CardDescription>
-
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle>Members & Staff</CardTitle>
+                <CardDescription>
+                  Active staff accounts associated with this tenant&apos;s directory.
+                </CardDescription>
+              </div>
+              <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Plus className="size-4 mr-2" />
+                    Add Member
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                  <form onSubmit={handleAddMember}>
+                    <DialogHeader>
+                      <DialogTitle>Add Staff Member</DialogTitle>
+                      <DialogDescription>
+                        Create a new staff member and assign them a role in this business.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="member-name">Full Name</Label>
+                        <Input
+                          id="member-name"
+                          placeholder="Jane Doe"
+                          value={memberFullName}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMemberFullName(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="member-email">Email Address</Label>
+                        <Input
+                          id="member-email"
+                          type="email"
+                          placeholder="jane@company.com"
+                          value={memberEmail}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMemberEmail(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="member-role">Assign Role</Label>
+                        <Select
+                          id="member-role"
+                          value={memberRoleId}
+                          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setMemberRoleId(e.target.value)}
+                          required
+                        >
+                          <option value="">Select a role</option>
+                          {roles.map((role) => (
+                            <option key={role.id} value={role.id}>
+                              {role.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="member-password">Password</Label>
+                          <span className="text-2xs text-muted-foreground">(Optional)</span>
+                        </div>
+                        <Input
+                          id="member-password"
+                          type="password"
+                          placeholder="Leave blank to auto-generate"
+                          value={memberPassword}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMemberPassword(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button type="button" variant="ghost" onClick={() => setIsAddMemberOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={isAddingMember}>
+                        {isAddingMember && <Loader2 className="size-4 animate-spin mr-2" />}
+                        Add Member
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </CardHeader>
             <CardContent>
               {memberships.length === 0 ? (

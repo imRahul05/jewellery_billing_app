@@ -29,9 +29,24 @@ export interface AdminMembership {
   roles: string[];
 }
 
+export interface AdminRole {
+  id: string;
+  name: string;
+  description: string | null;
+  isSystem: boolean;
+}
+
 export interface BusinessDetailResponse {
   tenant: TenantDetails;
   memberships: AdminMembership[];
+  roles: AdminRole[];
+}
+
+export interface AddMemberRequest {
+  email: string;
+  fullName: string;
+  roleId: string;
+  password?: string;
 }
 
 export const adminApi = {
@@ -41,4 +56,8 @@ export const adminApi = {
   getBusiness: (id: string) => api.get<BusinessDetailResponse>(`/admin/businesses/${id}`),
   updateBusinessStatus: (id: string, data: { isActive: boolean }) =>
     api.patch<TenantDetails>(`/admin/businesses/${id}`, data),
+  updateBusiness: (id: string, data: Partial<Omit<TenantDetails, "id" | "createdAt" | "onboardedAt">>) =>
+    api.patch<TenantDetails>(`/admin/businesses/${id}`, data),
+  addBusinessMember: (id: string, data: AddMemberRequest) =>
+    api.post<AdminMembership>(`/admin/businesses/${id}/members`, data),
 };
