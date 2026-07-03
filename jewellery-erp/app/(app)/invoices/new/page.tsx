@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useCustomers } from "@/lib/query/hooks/use-customers";
 import { useInventoryItems } from "@/lib/query/hooks/use-inventory-items";
@@ -304,17 +304,17 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
               <CardTitle>Invoice Line Items</CardTitle>
               <CardDescription>Configure pricing components for each piece of jewellery.</CardDescription>
             </div>
-            <Sheet open={isAddItemOpen} onOpenChange={setIsAddItemOpen}>
-              <SheetTrigger asChild>
+            <Dialog open={isAddItemOpen} onOpenChange={setIsAddItemOpen}>
+              <DialogTrigger asChild>
                 <Button size="sm" className="bg-indigo-600 text-white font-medium hover:bg-indigo-700">
                   <Plus className="mr-2 h-4 w-4" /> Add Item
                 </Button>
-              </SheetTrigger>
-              <SheetContent className="overflow-y-auto sm:max-w-md">
-                <SheetHeader>
-                  <SheetTitle>Add Jewellery Item</SheetTitle>
-                  <SheetDescription>Configure spot rate, making charges, wastage, and stone valuations.</SheetDescription>
-                </SheetHeader>
+              </DialogTrigger>
+              <DialogContent className="overflow-y-auto max-h-[90vh] sm:max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Add Jewellery Item</DialogTitle>
+                  <DialogDescription>Configure spot rate, making charges, wastage, and stone valuations.</DialogDescription>
+                </DialogHeader>
                 <div className="space-y-4 py-4">
                   {/* Inventory Item Link */}
                   <div className="space-y-1">
@@ -446,8 +446,8 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
                     Add Line Item
                   </Button>
                 </div>
-              </SheetContent>
-            </Sheet>
+              </DialogContent>
+            </Dialog>
           </CardHeader>
           <CardContent>
             {lines.length === 0 ? (
