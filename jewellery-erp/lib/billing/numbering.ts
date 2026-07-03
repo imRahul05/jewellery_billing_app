@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+
 import { type prisma } from "@/lib/db";
 
 // Use parameters utility to dynamically extract the exact type of the transaction client

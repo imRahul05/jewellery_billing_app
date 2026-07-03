@@ -10,7 +10,7 @@ import { inviteUser, assignRole, revokeRole, deactivateMember } from "./actions"
 export default async function SettingsUsersPage() {
   return withTenant(async (ctx) => {
     // 1. Authorize view permission
-    await authorize("user:read");
+    await authorize("user:manage");
 
     // 2. Fetch members, roles, and invitations
     const [members, roles, invitations] = await Promise.all([

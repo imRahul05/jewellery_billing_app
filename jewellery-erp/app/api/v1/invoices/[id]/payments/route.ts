@@ -3,7 +3,7 @@ import { authorize } from "@/lib/rbac/authorize";
 import { runWithTenant } from "@/lib/db/tenant-context";
 import { prisma } from "@/lib/db";
 import { PaymentCreateSchema } from "@/lib/billing/validation";
-import { Prisma, PaymentMethod, PaymentStatus } from "@prisma/client";
+import { Prisma, PaymentMethod, PaymentStatus, Payment, InvoiceStatus } from "@prisma/client";
 
 export interface SerializedPayment {
   id: string;
@@ -20,7 +20,7 @@ export interface SerializedPayment {
   createdAt: string;
 }
 
-export function serializePayment(p: Prisma.PaymentGetPayload<typeof paymentSelect>): SerializedPayment {
+export function serializePayment(p: Payment): SerializedPayment {
   return {
     ...p,
     amount: p.amount.toString(),
@@ -30,23 +30,6 @@ export function serializePayment(p: Prisma.PaymentGetPayload<typeof paymentSelec
     createdAt: p.createdAt.toISOString(),
   };
 }
-
-const paymentSelect = Prisma.validator<Prisma.PaymentDefaultArgs>()({
-  select: {
-    id: true,
-    invoiceId: true,
-    customerId: true,
-    amount: true,
-    method: true,
-    status: true,
-    referenceNo: true,
-    exchangeMetalWeight: true,
-    exchangeMetalValue: true,
-    paidAt: true,
-    receivedBy: true,
-    createdAt: true,
-  }
-});
 
 export async function GET(
   request: Request,
@@ -140,7 +123,7 @@ export async function POST(
           data: {
             amountPaid: newAmountPaid,
             balanceDue: newBalanceDue,
-            status: newStatus as any,
+            status: newStatus as InvoiceStatus,
           },
         });
 

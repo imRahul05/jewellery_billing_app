@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll, afterAll, vi } from "vitest";
 import { prisma } from "@/lib/db";
 import { runWithTenant } from "@/lib/db/tenant-context";
 import { seedTenantRoles } from "@/lib/rbac/seed-tenant-roles";
-import { Prisma, MetalType, StockMovementType } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { calculateLineItem, calculateInvoice } from "@/lib/billing/calculator";
 import { assignInvoiceNumber } from "@/lib/billing/numbering";
 import { computeOldGoldValue } from "@/lib/billing/old-gold";

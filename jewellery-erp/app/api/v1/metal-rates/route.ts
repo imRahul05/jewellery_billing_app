@@ -3,7 +3,7 @@ import { authorize } from "@/lib/rbac/authorize";
 import { runWithTenant } from "@/lib/db/tenant-context";
 import { prisma } from "@/lib/db";
 import { MetalRateCreateSchema } from "@/lib/billing/validation";
-import { MetalType, Prisma } from "@prisma/client";
+import { MetalType, Prisma, MetalRate } from "@prisma/client";
 
 export interface SerializedMetalRate {
   id: string;
@@ -16,7 +16,7 @@ export interface SerializedMetalRate {
   updatedAt: string;
 }
 
-export function serializeMetalRate(rate: Prisma.MetalRateGetPayload<typeof rateSelect>): SerializedMetalRate {
+export function serializeMetalRate(rate: MetalRate): SerializedMetalRate {
   return {
     ...rate,
     purityFineness: rate.purityFineness ? rate.purityFineness.toString() : null,
@@ -26,20 +26,6 @@ export function serializeMetalRate(rate: Prisma.MetalRateGetPayload<typeof rateS
     updatedAt: rate.updatedAt.toISOString(),
   };
 }
-
-const rateSelect = Prisma.validator<Prisma.MetalRateDefaultArgs>()({
-  select: {
-    id: true,
-    tenantId: true,
-    metalType: true,
-    purityFineness: true,
-    rateDate: true,
-    ratePerGram: true,
-    source: true,
-    createdAt: true,
-    updatedAt: true,
-  }
-});
 
 export async function GET(request: Request): Promise<NextResponse> {
   try {

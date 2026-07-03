@@ -4,7 +4,7 @@ import { runWithTenant } from "@/lib/db/tenant-context";
 import { prisma } from "@/lib/db";
 import { InvoiceCreateSchema } from "@/lib/billing/validation";
 import { calculateInvoice, type LineItemInput } from "@/lib/billing/calculator";
-import { Prisma, Invoice, InvoiceLineItem, MetalType } from "@prisma/client";
+import { Prisma, Invoice, InvoiceLineItem, MetalType, InvoiceStatus, InvoiceType } from "@prisma/client";
 
 export interface SerializedInvoiceLineItem {
   id: string;
@@ -141,8 +141,8 @@ export async function GET(request: Request): Promise<NextResponse> {
         where: {
           deletedAt: null,
           customerId: customerId,
-          status: status as any,
-          type: type as any,
+          status: status as InvoiceStatus,
+          type: type as InvoiceType,
         },
         orderBy: { createdAt: "desc" },
         take: limit,

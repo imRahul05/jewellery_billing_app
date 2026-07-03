@@ -73,7 +73,7 @@ const round2 = (val: Prisma.Decimal): Prisma.Decimal => {
 export function calculateLineItem(input: LineItemInput, gstStrategy: GstStrategy = compositeGstStrategy): LineItemResult {
   const grossWeight = new Prisma.Decimal(input.grossWeight);
   const stoneWeight = new Prisma.Decimal(input.stoneWeight);
-  const purity = new Prisma.Decimal(input.purity);
+
   const metalRatePerGram = new Prisma.Decimal(input.metalRatePerGram);
   const makingChargeValue = new Prisma.Decimal(input.makingChargeValue);
   const wastageValue = new Prisma.Decimal(input.wastageValue);
@@ -232,10 +232,7 @@ export function calculateInvoice(
 
     // Recompute GST on final taxable value
     const baseLineInput = linesInput[baseLines.indexOf(line)];
-    const grossWeight = new Prisma.Decimal(baseLineInput.grossWeight);
-    const stoneWeight = new Prisma.Decimal(baseLineInput.stoneWeight);
-    const netWeight = grossWeight.sub(stoneWeight);
-    const chargeableWeight = line.chargeableWeight;
+
 
     // Proportions
     const finalDiscountFactor = line.lineGross.greaterThan(0) ? finalTaxable.div(line.lineGross) : new Prisma.Decimal(0);

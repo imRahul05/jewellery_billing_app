@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { serializeInvoice } from "../../route";
 import { calculateInvoice } from "@/lib/billing/calculator";
 import { assignInvoiceNumber } from "@/lib/billing/numbering";
-import { Prisma, MetalType, StockMovementType } from "@prisma/client";
+import { Prisma, StockMovementType, InvoiceStatus } from "@prisma/client";
 
 export async function POST(
   request: Request,
@@ -167,7 +167,7 @@ export async function POST(
           where: { id },
           data: {
             invoiceNumber,
-            status: finalStatus as any,
+            status: finalStatus as InvoiceStatus,
             subtotal: calcResult.subTotalTaxable,
             cgstTotal: calcResult.totalCgst,
             sgstTotal: calcResult.totalSgst,

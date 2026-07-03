@@ -1,6 +1,7 @@
-import { requireSession } from "@/lib/auth/session";
-import { getEffectivePermissions } from "@/lib/rbac/permissions";
+"use client";
+
 import React from "react";
+import { useTenantStore } from "@/lib/stores/tenant-store";
 
 interface CanProps {
   permission: string | string[];
@@ -9,30 +10,21 @@ interface CanProps {
 }
 
 /**
- * Server Component for conditional rendering based on RBAC permissions.
+ * Client Component for conditional rendering based on RBAC permissions.
  *
  * NOTE: Gating in the UI is cosmetic for user experience.
  * Server Actions and Route Handlers must enforce permissions authoritatively.
  */
-export async function Can({
+export function Can({
   permission,
   children,
   fallback = null,
-}: CanProps): Promise<React.ReactElement | null> {
-  let allowed = false;
-
-  try {
-    const session = await requireSession();
-    if (session) {
-      const perms = await getEffectivePermissions(session.userId, session.tenantId);
-      const required = Array.isArray(permission) ? permission : [permission];
-      // AND semantics: all required permissions must be met
-      allowed = required.every((p) => perms.has(p));
-    }
-  } catch {
-    // On any error (e.g. no session), deny access
-    allowed = false;
-  }
+}: CanProps): React.JSX.Element | null {
+  const permissions = useTenantStore((state) => state.permissions);
+  const required = Array.isArray(permission) ? permission : [permission];
+  
+  // Check if all required permissions are met
+  const allowed = required.every((p) => permissions.includes(p));
 
   if (allowed) {
     return <>{children}</>;
