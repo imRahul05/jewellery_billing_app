@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { qk } from "@/lib/query/keys";
 import { supplierApi, SupplierInput } from "@/lib/api/supplier.api";
+import { useRouter } from "next/navigation";
 
 export function useSuppliers(tenantId: string, filters?: { search?: string }) {
   return useQuery({
@@ -28,6 +29,7 @@ export function useSupplierDetail(tenantId: string, id: string) {
 
 export function useCreateSupplier(tenantId: string) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   return useMutation({
     mutationFn: async (data: SupplierInput) => {
       const res = await supplierApi.createSupplier(data);
@@ -35,12 +37,14 @@ export function useCreateSupplier(tenantId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.suppliers.all(tenantId) });
+      router.refresh();
     },
   });
 }
 
 export function useUpdateSupplier(tenantId: string, id: string) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   return useMutation({
     mutationFn: async (data: Partial<SupplierInput>) => {
       const res = await supplierApi.updateSupplier(id, data);
@@ -49,12 +53,14 @@ export function useUpdateSupplier(tenantId: string, id: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.suppliers.detail(tenantId, id) });
       queryClient.invalidateQueries({ queryKey: qk.suppliers.all(tenantId) });
+      router.refresh();
     },
   });
 }
 
 export function useDeleteSupplier(tenantId: string, id: string) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   return useMutation({
     mutationFn: async () => {
       const res = await supplierApi.deleteSupplier(id);
@@ -62,6 +68,8 @@ export function useDeleteSupplier(tenantId: string, id: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.suppliers.all(tenantId) });
+      router.refresh();
     },
   });
 }
+

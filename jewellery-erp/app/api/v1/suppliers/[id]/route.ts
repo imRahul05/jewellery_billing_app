@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { serializeSupplier } from "../route";
+import { revalidateTag } from "next/cache";
+
 
 const SupplierUpdateSchema = z.object({
   name: z.string().min(1, "Name is required").optional(),
@@ -79,6 +81,8 @@ export async function PATCH(
         },
       });
 
+      revalidateTag(`suppliers-${session.tenantId}`, { expire: 0 });
+
       return NextResponse.json({ data: serializeSupplier(updated) });
     });
   } catch (err: unknown) {
@@ -117,6 +121,8 @@ export async function DELETE(
         where: { id: resolvedParams.id },
         data: { deletedAt: new Date() },
       });
+
+      revalidateTag(`suppliers-${session.tenantId}`, { expire: 0 });
 
       return NextResponse.json({ data: { success: true } });
     });

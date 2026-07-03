@@ -1,13 +1,12 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/server";
-import { prisma } from "@/lib/db";
+import { getUserByAuthIdQuery } from "@/lib/db/queries/user";
+import { getUserMembershipsQuery } from "@/lib/db/queries/members";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { onboardBusinessAction, selectTenantAction } from "./actions";
-
-export const dynamic = "force-dynamic";
 
 export default async function SelectTenantPage() {
   const { data: session } = await auth.getSession();
@@ -16,23 +15,10 @@ export default async function SelectTenantPage() {
   }
 
   // Find app user projection
-  const user = await prisma.user.findUnique({
-    where: { authUserId: session.user.id },
-    select: { id: true, fullName: true },
-  });
+  const user = await getUserByAuthIdQuery(session.user.id);
 
   const memberships = user
-    ? await prisma.userTenantMembership.findMany({
-        where: { userId: user.id, isActive: true },
-        include: {
-          tenant: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      })
+    ? await getUserMembershipsQuery(user.id)
     : [];
 
   // 1. Onboarding Form (User has no profile yet or has 0 active memberships)

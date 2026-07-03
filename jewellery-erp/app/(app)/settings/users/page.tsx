@@ -1,6 +1,8 @@
 import { withTenant } from "@/lib/auth/with-tenant";
-import { prisma } from "@/lib/db";
 import { authorize } from "@/lib/rbac/authorize";
+import { getTenantMembersQuery } from "@/lib/db/queries/members";
+import { getTenantRolesQuery } from "@/lib/db/queries/roles";
+import { getPendingInvitationsQuery } from "@/lib/db/queries/invitations";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,33 +12,13 @@ import { inviteUser, assignRole, revokeRole, deactivateMember } from "./actions"
 export default async function SettingsUsersPage() {
   return withTenant(async (ctx) => {
     // 1. Authorize view permission
-    await authorize("user:read");
+    await authorize("user:manage");
 
     // 2. Fetch members, roles, and invitations
     const [members, roles, invitations] = await Promise.all([
-      prisma.userTenantMembership.findMany({
-        where: { tenantId: ctx.tenantId, isActive: true },
-        include: {
-          user: true,
-          userRoles: {
-            include: {
-              role: true,
-            },
-          },
-        },
-        orderBy: { createdAt: "asc" },
-      }),
-      prisma.role.findMany({
-        where: { tenantId: ctx.tenantId, deletedAt: null },
-        orderBy: { name: "asc" },
-      }),
-      prisma.invitation.findMany({
-        where: { tenantId: ctx.tenantId, status: "pending" },
-        include: {
-          role: true,
-        },
-        orderBy: { createdAt: "desc" },
-      }),
+      getTenantMembersQuery(ctx.tenantId),
+      getTenantRolesQuery(ctx.tenantId),
+      getPendingInvitationsQuery(ctx.tenantId),
     ]);
 
     // Handle invitation submit

@@ -221,6 +221,7 @@ model Tenant {
   fileAssets         FileAsset[]            @relation("TenantAssets")
   featureFlags       FeatureFlag[]
   invitations        Invitation[]
+  invoiceCounters    InvoiceCounter[]
 
   @@index([isActive])
   @@map("tenants")
@@ -875,3 +876,20 @@ model Invitation {
   @@index([email])
   @@map("invitations")
 }
+
+model InvoiceCounter {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  series    String   @db.VarChar(10)   // INV, CM, QTN, CN, PUR, RINV, JOB
+  fy        String   @db.VarChar(7)    // e.g. "2024-25"
+  nextSeq   BigInt   @default(1) @map("next_seq")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, series, fy])
+  @@index([tenantId])
+  @@map("invoice_counters")
+}
+
