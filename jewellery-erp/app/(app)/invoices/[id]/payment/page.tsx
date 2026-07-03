@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, use } from "react";
+import React, { useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { toast } from "sonner";
-import { invoiceApi, PaymentCreateInput } from "@/lib/api/invoices.api";
-import { SerializedInvoice } from "@/app/api/v1/invoices/route";
+import { useInvoiceDetail, useRecordPayment } from "@/lib/query/hooks/use-invoices";
+import { useTenantStore } from "@/lib/stores/tenant-store";
+import { PaymentCreateInput } from "@/lib/api/invoices.api";
 import { ArrowLeft, Wallet } from "lucide-react";
 
 export default function RecordPaymentPage({
@@ -21,12 +22,15 @@ export default function RecordPaymentPage({
   const router = useRouter();
   const { id } = use(params);
 
-  const [invoice, setInvoice] = useState<SerializedInvoice | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [submitting, setSubmitting] = useState<boolean>(false);
+  const { tenantId } = useTenantStore();
+  const tId = tenantId || "";
+
+  // React Query Hooks
+  const { data: invoice, isLoading: loading } = useInvoiceDetail(tId, id);
+  const { mutateAsync: recordPayment, isPending: submitting } = useRecordPayment(tId);
 
   // Form State
-  const [amount, setAmount] = useState<string>("");
+  const [amount, setAmount] = useState<string | null>(null);
   const [method, setMethod] = useState<
     "cash" | "card" | "upi" | "bank_transfer" | "cheque" | "store_credit" | "gold_exchange"
   >("cash");
@@ -34,28 +38,14 @@ export default function RecordPaymentPage({
   const [exchangeWeight, setExchangeWeight] = useState<string>("");
   const [exchangeValue, setExchangeValue] = useState<string>("");
 
-  useEffect(() => {
-    const fetchInvoice = async (): Promise<void> => {
-      try {
-        setLoading(true);
-        const res = await invoiceApi.getInvoiceById(id);
-        setInvoice(res.data);
-        setAmount(res.data.balanceDue); // Default to paying remaining balance
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Failed to load invoice";
-        toast.error(msg);
-      } finally {
-        setLoading(false);
-      }
-    };
-    void fetchInvoice();
-  }, [id]);
+
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     if (!invoice) return;
 
-    const payAmt = parseFloat(amount);
+    const resolvedAmount = amount !== null ? amount : invoice.balanceDue;
+    const payAmt = parseFloat(resolvedAmount);
     const balance = parseFloat(invoice.balanceDue);
 
     if (isNaN(payAmt) || payAmt <= 0) {
@@ -69,7 +59,6 @@ export default function RecordPaymentPage({
     }
 
     try {
-      setSubmitting(true);
       const payload: PaymentCreateInput = {
         amount: payAmt,
         method,
@@ -79,14 +68,12 @@ export default function RecordPaymentPage({
         paidAt: new Date(),
       };
 
-      await invoiceApi.createPayment(id, payload);
+      await recordPayment({ id, data: payload });
       toast.success(`Payment of ₹${payAmt.toFixed(2)} recorded successfully!`);
       router.push(`/invoices/${id}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to record payment";
       toast.error(msg);
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -153,7 +140,7 @@ export default function RecordPaymentPage({
                   type="number"
                   step="0.01"
                   className="pl-7 font-semibold"
-                  value={amount}
+                  value={amount !== null ? amount : (invoice?.balanceDue || "")}
                   onChange={(e) => setAmount(e.target.value)}
                   required
                 />

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, use } from "react";
+import React, { useState, use } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { useInvoiceDetail, useFinalizeInvoice, useCancelInvoice, useProcessReturn } from "@/lib/query/hooks/use-invoices";
+import { useTenantStore } from "@/lib/stores/tenant-store";
 import { invoiceApi, ReturnInvoiceInput } from "@/lib/api/invoices.api";
-import { SerializedInvoice } from "@/app/api/v1/invoices/route";
 import { FileText, ArrowLeft, CreditCard, Ban, Undo2, CheckCircle } from "lucide-react";
 
 export default function InvoiceDetailPage({
@@ -22,12 +23,17 @@ export default function InvoiceDetailPage({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { id } = use(params);
-  
-  const [invoice, setInvoice] = useState<SerializedInvoice | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [actionLoading, setActionLoading] = useState<boolean>(false);
 
-  const [refreshKey, setRefreshKey] = useState<number>(0);
+  const { tenantId } = useTenantStore();
+  const tId = tenantId || "";
+
+  // React Query Hooks
+  const { data: invoice, isLoading: loading } = useInvoiceDetail(tId, id);
+  const { mutateAsync: finalizeInvoice, isPending: finalizing } = useFinalizeInvoice(tId);
+  const { mutateAsync: cancelInvoice, isPending: cancelling } = useCancelInvoice(tId);
+  const { mutateAsync: processReturn, isPending: returning } = useProcessReturn(tId);
+
+  const actionLoading = finalizing || cancelling || returning;
 
   // Return mode state
   const isReturnMode = searchParams.get("return") === "true";
@@ -38,53 +44,15 @@ export default function InvoiceDetailPage({
   const [cancelReason, setCancelReason] = useState<string>("");
   const [isCancelOpen, setIsCancelOpen] = useState<boolean>(false);
 
-  useEffect(() => {
-    let active = true;
-    const loadInvoice = async (): Promise<void> => {
-      try {
-        setLoading(true);
-        const res = await invoiceApi.getInvoiceById(id);
-        if (active) {
-          setInvoice(res.data);
-          // Initialize return quantities
-          const qties: Record<string, number> = {};
-          res.data.lineItems?.forEach(line => {
-            qties[line.id] = line.quantity;
-          });
-          setReturnQuantities(qties);
-        }
-      } catch (err: unknown) {
-        if (active) {
-          const msg = err instanceof Error ? err.message : "Failed to load invoice";
-          toast.error(msg);
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    };
-    void loadInvoice();
-    return () => {
-      active = false;
-    };
-  }, [id, refreshKey]);
 
-  const fetchInvoice = (): void => {
-    setRefreshKey(prev => prev + 1);
-  };
 
   const handleFinalize = async (): Promise<void> => {
     try {
-      setActionLoading(true);
-      await invoiceApi.finalizeInvoice(id);
+      await finalizeInvoice(id);
       toast.success("Invoice finalized and sequence number assigned!");
-      fetchInvoice();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to finalize invoice";
       toast.error(msg);
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -94,16 +62,12 @@ export default function InvoiceDetailPage({
       return;
     }
     try {
-      setActionLoading(true);
-      await invoiceApi.cancelInvoice(id, cancelReason);
+      await cancelInvoice({ id, reason: cancelReason });
       toast.success("Invoice cancelled successfully!");
       setIsCancelOpen(false);
-      fetchInvoice();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to cancel invoice";
       toast.error(msg);
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -122,17 +86,16 @@ export default function InvoiceDetailPage({
   };
 
   const handleSubmitReturn = async (): Promise<void> => {
+    if (!invoice) return;
     if (!returnReason) {
       toast.error("Please provide a return reason.");
       return;
     }
 
-    const payloadLines = Object.entries(returnQuantities)
-      .filter(([, qty]) => qty > 0)
-      .map(([lineItemId, quantity]) => ({
-        lineItemId,
-        quantity,
-      }));
+    const payloadLines = invoice.lineItems?.map((line) => ({
+      lineItemId: line.id,
+      quantity: returnQuantities[line.id] !== undefined ? returnQuantities[line.id] : line.quantity,
+    })).filter((l) => l.quantity > 0) || [];
 
     if (payloadLines.length === 0) {
       toast.error("Please return at least one item.");
@@ -140,20 +103,17 @@ export default function InvoiceDetailPage({
     }
 
     try {
-      setActionLoading(true);
       const payload: ReturnInvoiceInput = {
         reason: returnReason,
         lines: payloadLines,
       };
 
-      const res = await invoiceApi.createReturn(id, payload);
-      toast.success(`Credit Note ${res.data.invoiceNumber} generated!`);
-      router.push(`/invoices/${res.data.id}`);
+      const res = await processReturn({ id, data: payload });
+      toast.success(`Credit Note ${res.invoiceNumber} generated!`);
+      router.push(`/invoices/${res.id}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to process return";
       toast.error(msg);
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -273,7 +233,7 @@ export default function InvoiceDetailPage({
                           min="0"
                           max={line.quantity}
                           className="w-20 ml-auto text-right"
-                          value={returnQuantities[line.id] || 0}
+                          value={returnQuantities[line.id] !== undefined ? returnQuantities[line.id] : line.quantity}
                           onChange={(e) => setReturnQuantities({
                             ...returnQuantities,
                             [line.id]: Math.min(line.quantity, Math.max(0, parseInt(e.target.value, 10) || 0)),

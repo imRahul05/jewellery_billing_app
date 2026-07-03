@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,11 +10,13 @@ import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { invoiceApi, InvoiceCreateInput, LineItemInput, OldGoldExchangeInput } from "@/lib/api/invoices.api";
-import { customerApi } from "@/lib/api/customer.api";
-import { inventoryApi, InventoryItemWithRelations } from "@/lib/api/inventory.api";
-import { metalRateApi } from "@/lib/api/metal-rates.api";
-import { Customer } from "@prisma/client";
+import { useCustomers } from "@/lib/query/hooks/use-customers";
+import { useInventoryItems } from "@/lib/query/hooks/use-inventory-items";
+import { useMetalRates } from "@/lib/query/hooks/use-metal-rates";
+import { useCreateInvoice, useFinalizeInvoice } from "@/lib/query/hooks/use-invoices";
+import { useTenantStore } from "@/lib/stores/tenant-store";
+import { InvoiceCreateInput, LineItemInput, OldGoldExchangeInput } from "@/lib/api/invoices.api";
+
 import { ChevronRight, ChevronLeft, Plus, Trash2, Calculator, ShoppingBag } from "lucide-react";
 
 export default function InvoiceBuilderPage(): React.JSX.Element {
@@ -22,9 +24,19 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
   const [step, setStep] = useState<number>(1);
   const [submitting, setSubmitting] = useState<boolean>(false);
 
-  // Master Data
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [inventoryItems, setInventoryItems] = useState<InventoryItemWithRelations[]>([]);
+  // Tenant Context
+  const { tenantId } = useTenantStore();
+  const tId = tenantId || "";
+
+  // React Query Hooks
+  const { data: customers = [] } = useCustomers(tId);
+  const { data: inventoryItems = [] } = useInventoryItems(tId, { status: "in_stock" });
+
+  const todayStr = React.useMemo(() => new Date().toISOString().split("T")[0], []);
+  const { data: ratesData = [] } = useMetalRates(tId, { rateDate: todayStr });
+
+  const { mutateAsync: createInvoice } = useCreateInvoice(tId);
+  const { mutateAsync: finalizeInvoice } = useFinalizeInvoice(tId);
 
   // Step 1 Form Data
   const [customerId, setCustomerId] = useState<string>("");
@@ -45,7 +57,7 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
   const [grossWeight, setGrossWeight] = useState<string>("");
   const [stoneWeight, setStoneWeight] = useState<string>("0");
   const [purity, setPurity] = useState<string>("0.916");
-  const [metalRate, setMetalRate] = useState<string>("");
+  const [metalRate, setMetalRate] = useState<string | null>(null);
   const [makingType, setMakingType] = useState<"PER_GRAM" | "PERCENT" | "FLAT">("PER_GRAM");
   const [makingVal, setMakingVal] = useState<string>("");
   const [wastageType, setWastageType] = useState<"PERCENT_WEIGHT" | "GRAMS" | "PERCENT_MAKING" | "NONE">("NONE");
@@ -68,27 +80,7 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
   const [invoiceDiscountType, setInvoiceDiscountType] = useState<"AMOUNT" | "PERCENT" | "NONE">("NONE");
   const [invoiceDiscountValue, setInvoiceDiscountValue] = useState<string>("0");
 
-  // Load Customers, Inventory Items, and Today's Rates
-  useEffect(() => {
-    const loadData = async (): Promise<void> => {
-      try {
-        const custRes = await customerApi.getCustomers();
-        setCustomers(custRes.data);
 
-        const invRes = await inventoryApi.getInventoryItems({ status: "in_stock" });
-        setInventoryItems(invRes.data);
-
-        // Prepopulate rate if today's rate exists
-        const rateRes = await metalRateApi.getMetalRates({ rateDate: new Date().toISOString().split("T")[0] });
-        if (rateRes.data.length > 0) {
-          setMetalRate(rateRes.data[0].ratePerGram);
-        }
-      } catch (err: unknown) {
-        console.error(err);
-      }
-    };
-    void loadData();
-  }, []);
 
   // Sync Item Select with details
   const handleItemSelect = (itemId: string): void => {
@@ -108,7 +100,8 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
   };
 
   const handleAddLineItem = (): void => {
-    if (!lineDesc || !grossWeight || !metalRate) {
+    const resolvedMetalRate = metalRate !== null ? metalRate : (ratesData[0]?.ratePerGram?.toString() || "");
+    if (!lineDesc || !grossWeight || !resolvedMetalRate) {
       toast.error("Please fill in item description, gross weight, and metal rate.");
       return;
     }
@@ -120,7 +113,7 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
       grossWeight: parseFloat(grossWeight),
       stoneWeight: parseFloat(stoneWeight),
       purity: parseFloat(purity),
-      metalRatePerGram: parseFloat(metalRate),
+      metalRatePerGram: parseFloat(resolvedMetalRate),
       makingChargeType: makingType,
       makingChargeValue: parseFloat(makingVal || "0"),
       wastageType,
@@ -191,12 +184,11 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
         oldGoldExchange: oldGold,
       };
 
-      const res = await invoiceApi.createInvoice(payload);
-      const createdInvoice = res.data;
+      const createdInvoice = await createInvoice(payload);
 
       if (finalize) {
         toast.info("Finalizing invoice...");
-        await invoiceApi.finalizeInvoice(createdInvoice.id);
+        await finalizeInvoice(createdInvoice.id);
         toast.success("Invoice finalized and stock updated!");
       } else {
         toast.success("Invoice draft saved successfully!");
@@ -372,7 +364,7 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
 
                   <div className="space-y-1">
                     <Label htmlFor="metal-rate">Metal Rate per Gram (INR)</Label>
-                    <Input id="metal-rate" type="number" value={metalRate} onChange={(e) => setMetalRate(e.target.value)} required />
+                    <Input id="metal-rate" type="number" value={metalRate !== null ? metalRate : (ratesData[0]?.ratePerGram?.toString() || "")} onChange={(e) => setMetalRate(e.target.value)} required />
                   </div>
 
                   {/* Making Charges (D1 selector) */}
