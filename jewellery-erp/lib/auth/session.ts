@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 import { auth } from "@/lib/auth/server";
 import { prisma } from "@/lib/db";
 
@@ -23,6 +24,9 @@ export interface Session {
  * Returns `{ userId, tenantId, membershipId, isSuperAdmin }`
  */
 export async function requireSession(): Promise<Session> {
+  // Neon Auth reads request cookies internally. Establish the runtime boundary
+  // explicitly so Cache Components does not probe the session during prerendering.
+  await connection();
   const { data: session } = await auth.getSession();
   if (!session?.user) redirect("/login");
 
@@ -87,4 +91,3 @@ export async function requireSuperAdminSession(): Promise<Session> {
   }
   return session;
 }
-

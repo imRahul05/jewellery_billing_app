@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { auth } from "@/lib/auth/server";
 import { getUserByAuthIdQuery } from "@/lib/db/queries/user";
 import { getUserMembershipsQuery } from "@/lib/db/queries/members";
@@ -9,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { onboardBusinessAction, selectTenantAction } from "./actions";
 
 export default async function SelectTenantPage() {
+  // Neon Auth reads request cookies internally, so defer this page to request time.
+  await connection();
   const { data: session } = await auth.getSession();
   if (!session?.user) {
     redirect("/login");

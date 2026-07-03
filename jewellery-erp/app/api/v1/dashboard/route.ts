@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { connection, NextResponse } from "next/server";
 import { authorize } from "@/lib/rbac/authorize";
 import { runWithTenant } from "@/lib/db/tenant-context";
 import { getDashboardStatsQuery } from "@/lib/db/queries/dashboard";
 
 export async function GET(): Promise<NextResponse | Response> {
+  // Keep Next.js's prerender control signal outside application error handling.
+  await connection();
   try {
     // 1. Authorize dashboard:read permission
     const session = await authorize("dashboard:read");
