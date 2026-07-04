@@ -76,11 +76,11 @@ function assertNoTenantSpoof(obj: unknown, tenantId: string, where: string) {
   }
 }
 
-function createPrismaClient() {
+function createClients() {
   const adapter = new PrismaNeon({ connectionString });
   const base = new PrismaClient({ adapter });
 
-  return base.$extends({
+  const extended = base.$extends({
     query: {
       $allModels: {
         $allOperations({ model, operation, args, query }) {
@@ -153,17 +153,35 @@ function createPrismaClient() {
       },
     },
   });
+
+  return { base, extended };
 }
 
-export type Db = ReturnType<typeof createPrismaClient>;
+type Clients = ReturnType<typeof createClients>;
+
+export type Db = Clients["extended"];
 
 // Singleton to avoid exhausting connections during dev hot-reload.
 const globalForPrisma = globalThis as unknown as {
-  prisma: Db | undefined;
+  __dbClients: Clients | undefined;
 };
 
-export const prisma: Db = globalForPrisma.prisma ?? createPrismaClient();
+const clients: Clients = globalForPrisma.__dbClients ?? createClients();
 
 if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
+  globalForPrisma.__dbClients = clients;
 }
+
+/** Tenant-scoped client — auto-injects tenant_id via ALS context. */
+export const prisma: Db = clients.extended;
+
+/**
+ * Unscoped Prisma client for platform-wide super-admin queries.
+ * Bypasses the tenant isolation interceptor entirely — does NOT rely on ALS.
+ * Use ONLY in admin routes that have already verified super-admin access.
+ *
+ * Why: The Neon serverless HTTP driver's internal fetch() does not propagate
+ * AsyncLocalStorage context in Turbopack, so the tenant-scoped client loses
+ * the isSuperAdmin flag across await boundaries.
+ */
+export const prismaAdmin: PrismaClient = clients.base;

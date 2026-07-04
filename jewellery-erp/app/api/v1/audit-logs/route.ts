@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { authorize } from "@/lib/rbac/authorize";
 import { runWithTenant } from "@/lib/db/tenant-context";
 import { prisma } from "@/lib/db";
+import { connection } from "next/server";
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: Request): Promise<NextResponse> {
+  await connection();
   try {
     const session = await authorize("audit:read");
 

@@ -1,5 +1,5 @@
 import "server-only";
-import { prisma } from "@/lib/db";
+import { prismaAdmin } from "@/lib/db";
 
 export interface PlatformStats {
   totalTenants: number;
@@ -11,17 +11,20 @@ export interface PlatformStats {
 
 /**
  * Retrieves aggregate platform-wide statistics for the Super Admin Overview page.
+ *
+ * Uses the unscoped `prismaAdmin` client because these are cross-tenant
+ * aggregate queries. Caller MUST have already verified super-admin access.
  */
 export async function getPlatformStatsQuery(): Promise<PlatformStats> {
   const [totalTenants, activeTenants, totalUsers, totalInvoices] = await Promise.all([
-    prisma.tenant.count({ where: { deletedAt: null } }),
-    prisma.tenant.count({ where: { isActive: true, deletedAt: null } }),
-    prisma.user.count(),
-    prisma.invoice.count({ where: { deletedAt: null } }),
+    prismaAdmin.tenant.count({ where: { deletedAt: null } }),
+    prismaAdmin.tenant.count({ where: { isActive: true, deletedAt: null } }),
+    prismaAdmin.user.count(),
+    prismaAdmin.invoice.count({ where: { deletedAt: null } }),
   ]);
 
   // Aggregate monthly tenant growth (last 6 months)
-  const tenants = await prisma.tenant.findMany({
+  const tenants = await prismaAdmin.tenant.findMany({
     where: { deletedAt: null },
     select: { createdAt: true },
     orderBy: { createdAt: "asc" },
