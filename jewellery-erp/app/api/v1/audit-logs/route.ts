@@ -4,7 +4,7 @@ import { runWithTenant } from "@/lib/db/tenant-context";
 import { prisma } from "@/lib/db";
 import { connection } from "next/server";
 
-export async function GET(request: Request): Promise<NextResponse> {
+export async function GET(): Promise<NextResponse> {
   await connection();
   try {
     const session = await authorize("audit:read");
