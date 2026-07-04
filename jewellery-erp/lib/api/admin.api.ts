@@ -49,6 +49,60 @@ export interface AddMemberRequest {
   password?: string;
 }
 
+export interface PlatformStats {
+  totalTenants: number;
+  activeTenants: number;
+  totalUsers: number;
+  totalInvoices: number;
+  tenantGrowth: { month: string; count: number }[];
+}
+
+export interface PlatformPlan {
+  id: string;
+  code: string;
+  name: string;
+  priceMonthly: string | number;
+  priceYearly: string | number;
+  maxUsers: number | null;
+  maxInvoicesMonthly: number | null;
+  features: unknown;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface PlatformUserMembership {
+  id: string;
+  tenantName: string;
+  roles: string[];
+}
+
+export interface PlatformUser {
+  id: string;
+  email: string;
+  fullName: string | null;
+  isSuperAdmin: boolean;
+  createdAt: string;
+  memberships: PlatformUserMembership[];
+}
+
+export interface PlatformAuditLog {
+  id: string;
+  occurredAt: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  requestId: string | null;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  tenantName: string;
+  actor: {
+    email: string;
+    fullName: string | null;
+  } | null;
+}
+
 export const adminApi = {
   listBusinesses: () => api.get<TenantDetails[]>("/admin/businesses"),
   createBusiness: (data: { businessName: string; ownerName: string; ownerEmail: string; ownerPassword?: string }) =>
@@ -60,4 +114,11 @@ export const adminApi = {
     api.patch<TenantDetails>(`/admin/businesses/${id}`, data),
   addBusinessMember: (id: string, data: AddMemberRequest) =>
     api.post<AdminMembership>(`/admin/businesses/${id}/members`, data),
+  getStats: () => api.get<PlatformStats>("/admin/stats"),
+  listPlans: () => api.get<PlatformPlan[]>("/admin/plans"),
+  savePlan: (data: Partial<PlatformPlan>) => api.post<PlatformPlan>("/admin/plans", data),
+  searchUsers: (search: string) => api.get<PlatformUser[]>("/admin/users", { search }),
+  getPlatformAuditLogs: () => api.get<PlatformAuditLog[]>("/admin/audit"),
+  startImpersonation: (tenantId: string) => api.post<{ success: boolean }>("/admin/impersonate/start", { tenantId }),
+  stopImpersonation: () => api.post<{ success: boolean }>("/admin/impersonate/stop"),
 };

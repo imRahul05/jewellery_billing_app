@@ -48,4 +48,8 @@ export const qk = {
   dashboard: {
     stats: (tenantId: string) => ["dashboard", tenantId, "stats"] as const,
   },
+  notifications: {
+    all: (tenantId: string) => ["notifications", tenantId] as const,
+    list: (tenantId: string) => ["notifications", tenantId, "list"] as const,
+  },
 } as const;
