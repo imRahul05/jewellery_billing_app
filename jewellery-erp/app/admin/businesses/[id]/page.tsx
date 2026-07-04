@@ -101,6 +101,24 @@ export default function BusinessDetailPage({
     }
   };
 
+  const [isImpersonating, setIsImpersonating] = useState(false);
+
+  const handleImpersonate = async () => {
+    if (!tenant) return;
+    setIsImpersonating(true);
+    try {
+      await adminApi.startImpersonation(tenant.id);
+      toast.success("Impersonation session started!");
+      window.location.href = "/dashboard";
+    } catch (err: unknown) {
+      console.error(err);
+      const msg = err instanceof Error ? err.message : "Failed to start impersonation";
+      toast.error(msg);
+    } finally {
+      setIsImpersonating(false);
+    }
+  };
+
   const handleSaveDetails = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!tenant) return;
@@ -548,6 +566,19 @@ export default function BusinessDetailPage({
                     "Activate Business"
                   )}
                 </Button>
+                {tenant.isActive && (
+                  <Button
+                    onClick={handleImpersonate}
+                    disabled={isImpersonating}
+                    className="w-full mt-2 bg-amber-600 hover:bg-amber-700 text-white font-medium shadow-sm transition-all"
+                  >
+                    {isImpersonating ? (
+                      <Loader2 className="size-4 animate-spin mr-2" />
+                    ) : (
+                      "Impersonate Business"
+                    )}
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

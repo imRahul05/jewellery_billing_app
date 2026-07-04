@@ -60,8 +60,9 @@ export async function requireSession(): Promise<Session> {
 
   let membership = memberships[0] || null;
 
+  const cookieStore = await cookies();
+
   if (memberships.length > 1) {
-    const cookieStore = await cookies();
     const selectedTenantId = cookieStore.get("current_tenant_id")?.value;
     const found = memberships.find((m) => m.tenantId === selectedTenantId);
     if (found) {
@@ -71,10 +72,27 @@ export async function requireSession(): Promise<Session> {
     }
   }
 
+  let tenantId = membership?.tenantId ?? "";
+  let membershipId = membership?.id ?? "";
+
+  // Super Admin impersonation override
+  if (user.isSuperAdmin) {
+    const actingTenantId = cookieStore.get("acting_tenant_id")?.value;
+    if (actingTenantId) {
+      const tenantExists = await prisma.tenant.findFirst({
+        where: { id: actingTenantId, deletedAt: null },
+      });
+      if (tenantExists) {
+        tenantId = actingTenantId;
+        membershipId = "super-admin-impersonation-membership";
+      }
+    }
+  }
+
   return {
     userId: user.id,
-    tenantId: membership?.tenantId ?? "",
-    membershipId: membership?.id ?? "",
+    tenantId,
+    membershipId,
     isSuperAdmin: user.isSuperAdmin,
   };
 }

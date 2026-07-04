@@ -1,12 +1,16 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Gem, LogOut, Plus } from "lucide-react";
+import { BarChart3, Building2, Gem, LogOut, Plus, ScrollText, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
+  { href: "/admin/overview", label: "Platform Overview", icon: BarChart3 },
   { href: "/admin/businesses", label: "All Businesses", icon: Building2 },
   { href: "/admin/businesses/new", label: "Register Business", icon: Plus },
+  { href: "/admin/subscriptions/plans", label: "Subscription Plans", icon: Gem },
+  { href: "/admin/users", label: "Platform Users", icon: Users },
+  { href: "/admin/audit", label: "System Audit Logs", icon: ScrollText },
 ] as const;
 
 export function AdminSidebar() {
@@ -22,7 +26,9 @@ export function AdminSidebar() {
       </div>
       <nav className="flex-1 space-y-1 p-2" aria-label="Admin navigation">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-          const exactActive = href === "/admin/businesses" ? pathname === "/admin/businesses" : pathname.startsWith(href);
+          const exactActive = href === "/admin/businesses"
+            ? (pathname === "/admin/businesses" || pathname.startsWith("/admin/businesses/"))
+            : pathname.startsWith(href);
 
 
           return (

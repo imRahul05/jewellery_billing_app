@@ -198,6 +198,14 @@ export async function POST(
         return updatedInvoice;
       });
 
+      // Trigger low-stock check for all products in the invoice
+      const { checkAndTriggerLowStock } = await import("@/lib/notifications/dispatcher");
+      for (const line of invoice.lineItems) {
+        if (line.productId) {
+          await checkAndTriggerLowStock(session.tenantId, line.productId);
+        }
+      }
+
       return NextResponse.json({ data: serializeInvoice(finalizedInvoice) });
     });
   } catch (err: unknown) {

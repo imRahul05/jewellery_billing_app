@@ -8,6 +8,7 @@ import { useTenantStore } from "@/lib/stores/tenant-store";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/app/theme-toggle";
+import { NotificationPopover } from "@/components/app/notification-popover";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 const MOBILE_NAV = [
@@ -67,6 +68,7 @@ export function Topbar({ userName }: { userName: string }) {
       </div>
       <div className="flex items-center gap-1">
         <ThemeToggle />
+        <NotificationPopover />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="gap-2">

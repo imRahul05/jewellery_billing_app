@@ -51,12 +51,12 @@ export async function getDashboardStatsQuery(tenantId: string): Promise<Dashboar
   return runWithTenant({ tenantId, userId: "system-cache", isSuperAdmin: false }, async () => {
     const now = new Date();
     
-    // 1. Time bounds
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    // 1. Time bounds (Using UTC to align with PostgreSQL DATE type)
+    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+    const todayEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
     
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+    const monthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999));
 
     // 2. Fetch Invoices within month
     const monthInvoices = await prisma.invoice.findMany({
@@ -185,13 +185,12 @@ export async function getDashboardStatsQuery(tenantId: string): Promise<Dashboar
       customerName: inv.customer?.name || null,
     }));
 
-    // 7. Sales Trend (Last 7 Days)
+    // 7. Sales Trend (Last 7 Days, aligning with UTC dates)
     const salesTrend: SalesTrendPoint[] = [];
     for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(now.getDate() - i);
-      const dStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-      const dEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
+      const dStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
+      const dEnd = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
 
       let dayTotal = new Prisma.Decimal(0);
       for (const inv of monthInvoices) {
@@ -204,7 +203,7 @@ export async function getDashboardStatsQuery(tenantId: string): Promise<Dashboar
         }
       }
 
-      const label = d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+      const label = d.toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
       salesTrend.push({
         date: label,
         total: dayTotal.toString(),

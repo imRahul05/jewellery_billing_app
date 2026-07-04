@@ -1,4 +1,4 @@
-# 03 — Database Design
+`# 03 — Database Design
 
 > **Product:** Jewellery ERP SaaS Platform — cloud-native, multi-tenant SaaS for Indian jewellery businesses.
 > **Phase:** 1 (Next.js web only).

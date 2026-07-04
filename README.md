@@ -4,9 +4,9 @@ A modern, multi-tenant Jewellery Enterprise Resource Planning (ERP) and Billing 
 
 ## 📊 Development Progress
 
-**Overall Completion**: `[███████████░░░░]` **73%** (11 / 15 Sprints Completed)
+**Overall Completion**: `[█████████████░░]` **87%** (13 / 15 Sprints Completed)
 
-We are following a phased, security-first, vertical-slice implementation strategy. Core infrastructure, multi-tenant isolation, and access controls are fully operational before business features are developed.
+We are following a security-first, vertical-slice implementation strategy. Core infrastructure, multi-tenant isolation, and access controls are fully operational before business features are developed.
 
 ### Phase Progress Tracker
 
@@ -17,7 +17,7 @@ We are following a phased, security-first, vertical-slice implementation strateg
 | **Phase 2: Master Data** | **M2** (Business config)<br>**M3** (Master data complete) | Business profile & settings, branches, metal rate config, Customer/Supplier CRUD, Inventory items & stock control | 3 Sprints (6 wks) | `[██████████] 100%` | Roadmap: [Development Roadmap](jewellery-saas-docs/docs/11-Development-Roadmap.md#phase-2--master-data-customers--suppliers--inventory-3-sprints--6-weeks)<br>Spec: [Inventory Management](jewellery-saas-docs/docs/10-Inventory-Management.md)<br>Tests: [phase2.test.ts](jewellery-erp/tests/phase2.test.ts) |
 | **Phase 3: Billing Engine + GST** | **M4** (First GST invoice)<br>**M5** (Invoice delivery) | Invoice builder, metal rate snapshot, concurrency-safe numbering, CGST/SGST/IGST calculation, payment capture, PDF templates, R2 storage | 3 Sprints (6 wks) | `[██████████] 100%` | Roadmap: [Development Roadmap](jewellery-saas-docs/docs/11-Development-Roadmap.md#phase-3--billing-engine--gst-3-sprints--6-weeks--core-value)<br>Spec: [Billing Engine](jewellery-saas-docs/docs/09-Billing-Engine.md)<br>Tests: [phase3.test.ts](jewellery-erp/tests/phase3.test.ts) |
 | **Phase 4: Reports & Analytics** | **M6** (Insight layer) | Operational & financial reports (sales, GST period, inventory), dashboard KPI summaries, Recharts integration | 2 Sprints (4 wks) | `[██████████] 100%` | Roadmap: [Development Roadmap](jewellery-saas-docs/docs/11-Development-Roadmap.md#phase-4--reports--dashboard-analytics-2-sprints--4-weeks)<br>Tests: [phase4.test.ts](jewellery-erp/tests/phase4.test.ts) |
-| **Phase 5: Ops & Administration** | **M7** (Ops & admin layer) | Immutable audit logs, Super Admin console (suspension, audited impersonation), subscriptions/plans management, notification framework | 2 Sprints (4 wks) | `[░░░░░░░░░░] 0%` | Roadmap: [Development Roadmap](jewellery-saas-docs/docs/11-Development-Roadmap.md#phase-5--notifications--audit--super-admin-2-sprints--4-weeks) |
+| **Phase 5: Ops & Administration** | **M7** (Ops & admin layer) | Immutable audit logs, Super Admin console (suspension, audited impersonation), subscriptions/plans management, notification framework | 2 Sprints (4 wks) | `[██████████] 100%` | Roadmap: [Development Roadmap](jewellery-saas-docs/docs/11-Development-Roadmap.md#phase-5--notifications--audit--super-admin-2-sprints--4-weeks)<br>Tests: [phase5.test.ts](jewellery-erp/tests/phase5.test.ts) |
 | **Phase 6: Hardening & Launch** | **M8** (GA-ready) | Security audits, connection ceiling load-tests, UAT regression testing, beta tenant launch, GA checklist signoff | 2 Sprints (4 wks) | `[░░░░░░░░░░] 0%` | Roadmap: [Development Roadmap](jewellery-saas-docs/docs/11-Development-Roadmap.md#phase-6--hardening--launch-2-sprints--4-weeks) |
 
 ---

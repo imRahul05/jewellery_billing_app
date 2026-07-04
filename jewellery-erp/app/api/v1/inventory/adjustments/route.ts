@@ -80,6 +80,10 @@ export async function POST(request: Request): Promise<NextResponse> {
         return { adjustment, item: updatedItem };
       });
 
+      // Trigger low-stock check for the adjusted product
+      const { checkAndTriggerLowStock } = await import("@/lib/notifications/dispatcher");
+      await checkAndTriggerLowStock(session.tenantId, item.productId);
+
       return NextResponse.json({ data: result });
     });
   } catch (err: unknown) {

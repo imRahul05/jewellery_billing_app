@@ -95,6 +95,17 @@ export async function POST(request: Request): Promise<NextResponse> {
         },
       });
 
+      // Write Audit Log
+      const { writeAuditLog } = await import("@/lib/audit/logger");
+      await writeAuditLog({
+        tenantId: session.tenantId,
+        actorUserId: session.userId,
+        action: "create",
+        entityType: "MetalRate",
+        entityId: rate.id,
+        after: serializeMetalRate(rate),
+      });
+
       return NextResponse.json({ data: serializeMetalRate(rate) });
     });
   } catch (err: unknown) {
