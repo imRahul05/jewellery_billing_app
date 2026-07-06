@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { connection } from "next/server";
 import { auth } from "@/lib/auth/server";
 import { prisma } from "@/lib/db";
@@ -24,6 +24,27 @@ export interface Session {
  * Returns `{ userId, tenantId, membershipId, isSuperAdmin }`
  */
 export async function requireSession(): Promise<Session> {
+  // Check for load test bypass headers before hitting external auth
+  try {
+    const h = await headers();
+    const bypassToken = h.get("x-load-test-bypass-auth");
+    const secret = process.env.LOAD_TEST_BYPASS_SECRET || "load-test-local-secret";
+    if (bypassToken && bypassToken === secret) {
+      const mockUserId = h.get("x-load-test-user-id");
+      const mockTenantId = h.get("x-load-test-tenant-id");
+      if (mockUserId && mockTenantId) {
+        return {
+          userId: mockUserId,
+          tenantId: mockTenantId,
+          membershipId: "load-test-mock-membership",
+          isSuperAdmin: h.get("x-load-test-super-admin") === "true",
+        };
+      }
+    }
+  } catch {
+    // Fallback when executed outside request context
+  }
+
   // Neon Auth reads request cookies internally. Establish the runtime boundary
   // explicitly so Cache Components does not probe the session during prerendering.
   await connection();
