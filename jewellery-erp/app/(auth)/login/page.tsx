@@ -66,14 +66,6 @@ export default function LoginPage() {
           </Button>
         </form>
       </CardContent>
-      <CardFooter className="flex flex-wrap items-center justify-between gap-2 border-t bg-muted/30 px-6 py-4">
-        <span className="text-xs text-muted-foreground">
-          Don&apos;t have an account?
-        </span>
-        <Button variant="link" size="sm" className="h-auto p-0 text-xs text-primary" asChild>
-          <Link href="/sign-up">Create account</Link>
-        </Button>
-      </CardFooter>
     </Card>
   );
 }
