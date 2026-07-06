@@ -131,14 +131,14 @@ export async function acceptInvite(
 
     // 3. Create or update user projection
     const user = await prisma.user.upsert({
-      where: { authUserId: neonSession.user.id },
+      where: { email: neonSession.user.email },
       create: {
         authUserId: neonSession.user.id,
         email: neonSession.user.email,
         fullName: neonSession.user.name || "",
       },
       update: {
-        email: neonSession.user.email,
+        authUserId: neonSession.user.id,
       },
     });
 

@@ -102,9 +102,9 @@ async function main() {
     const result = await db.$transaction(async (tx) => {
       // 1. Upsert User projection
       const user = await tx.user.upsert({
-        where: { authUserId },
+        where: { email },
         create: { authUserId, email, fullName: ownerName },
-        update: { email, fullName: ownerName },
+        update: { authUserId, fullName: ownerName },
       });
       console.log("   ✓ User upserted:", user.id);
 

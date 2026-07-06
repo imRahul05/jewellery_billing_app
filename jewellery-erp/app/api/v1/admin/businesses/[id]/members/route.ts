@@ -63,8 +63,8 @@ export async function POST(
 
         // 4. If user does not exist in local database, register in Neon Auth (Better Auth)
         if (!user) {
-          const neonAuthBaseUrl = process.env.NEON_AUTH_BASE_URL || "http://localhost:3000";
-          const signupUrl = `${neonAuthBaseUrl}/sign-up/email`;
+          const neonAuthBaseUrl = new URL(request.url).origin;
+          const signupUrl = `${neonAuthBaseUrl}/api/auth/sign-up/email`;
 
           const signupRes = await fetch(signupUrl, {
             method: "POST",
@@ -76,7 +76,15 @@ export async function POST(
             }),
           });
 
-          const signupData = await signupRes.json();
+          let signupData;
+          const responseText = await signupRes.text();
+          try {
+            signupData = JSON.parse(responseText);
+          } catch (e) {
+            console.error("Non-JSON response from auth system:", responseText);
+            return NextResponse.json({ error: "Auth system error: " + responseText.substring(0, 100) }, { status: 500 });
+          }
+
           if (!signupRes.ok || signupData.error) {
             return NextResponse.json(
               { error: signupData.error?.message || "Failed to register user in authentication system" },

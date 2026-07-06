@@ -37,14 +37,14 @@ export async function onboardBusiness(input: OnboardInput): Promise<OnboardResul
   return prisma.$transaction(async (tx) => {
     // 1. Create or upsert the User projection
     const user = await tx.user.upsert({
-      where: { authUserId: input.authUserId },
+      where: { email: input.email },
       create: {
         authUserId: input.authUserId,
         email: input.email,
         fullName: input.ownerName,
       },
       update: {
-        email: input.email,
+        authUserId: input.authUserId,
         fullName: input.ownerName,
       },
     });

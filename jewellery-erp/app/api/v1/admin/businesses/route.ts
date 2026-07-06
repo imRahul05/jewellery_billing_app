@@ -100,8 +100,8 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     // 1. Register owner account in Neon Auth (Better Auth) via raw server fetch.
     // This creates the auth user without setting cookies on the admin's request session.
-    const neonAuthBaseUrl = process.env.NEON_AUTH_BASE_URL || "http://localhost:3000";
-    const signupUrl = `${neonAuthBaseUrl}/sign-up/email`;
+    const neonAuthBaseUrl = new URL(request.url).origin;
+    const signupUrl = `${neonAuthBaseUrl}/api/auth/sign-up/email`;
 
     const signupRes = await fetch(signupUrl, {
       method: "POST",
@@ -113,7 +113,15 @@ export async function POST(request: Request): Promise<NextResponse> {
       }),
     });
 
-    const signupData = await signupRes.json();
+    let signupData;
+    const responseText = await signupRes.text();
+    try {
+      signupData = JSON.parse(responseText);
+    } catch (e) {
+      console.error("Non-JSON response from auth system:", responseText);
+      return NextResponse.json({ error: "Auth system error: " + responseText.substring(0, 100) }, { status: 500 });
+    }
+
     if (!signupRes.ok || signupData.error) {
       return NextResponse.json(
         { error: signupData.error?.message || "Failed to create user in authentication system" },
