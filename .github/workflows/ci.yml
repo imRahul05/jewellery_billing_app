@@ -1,0 +1,163 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, implement/phase-1 ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # Job 1: Quick Static Analysis (Lint, Format, etc.)
+  lint-and-format:
+    name: Lint & Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: './jewellery-erp/pnpm-lock.yaml'
+
+      - name: Install Dependencies
+        run: pnpm --filter jewellery-erp install --frozen-lockfile
+
+      - name: Run Linter
+        run: pnpm --filter jewellery-erp run lint
+
+      - name: Format Check
+        run: pnpm --filter jewellery-erp exec prettier --check . || npx prettier --check jewellery-erp
+
+  # Job 2: Typecheck (Requires Prisma client generated, but no live DB)
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: './jewellery-erp/pnpm-lock.yaml'
+
+      - name: Install Dependencies
+        run: pnpm --filter jewellery-erp install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm --filter jewellery-erp run db:generate
+
+      - name: Run TypeScript Compiler Check
+        run: pnpm --filter jewellery-erp tsc --noEmit
+
+  # Job 3: Build Check (Runs in parallel, caches Next.js build artifact)
+  build:
+    name: Next.js Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: './jewellery-erp/pnpm-lock.yaml'
+
+      - name: Install Dependencies
+        run: pnpm --filter jewellery-erp install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm --filter jewellery-erp run db:generate
+
+      - name: Cache Next.js Build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/jewellery-erp/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/pnpm-lock.yaml') }}-
+            ${{ runner.os }}-nextjs-
+
+      - name: Build Project
+        run: pnpm --filter jewellery-erp run build
+
+  # Job 4: Integration and Unit Tests (Requires Postgres)
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: jewellery_erp_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: './jewellery-erp/pnpm-lock.yaml'
+
+      - name: Install Dependencies
+        run: pnpm --filter jewellery-erp install --frozen-lockfile
+
+      - name: Setup Test Environment Variables
+        run: |
+          echo "DATABASE_URL=postgresql://test_user:test_password@localhost:5432/jewellery_erp_test" >> $GITHUB_ENV
+          echo "DIRECT_URL=postgresql://test_user:test_password@localhost:5432/jewellery_erp_test" >> $GITHUB_ENV
+          echo "NEON_AUTH_BASE_URL=http://localhost:3000" >> $GITHUB_ENV
+          echo "VITE_NEON_AUTH_URL=https://dummy-auth-url.neon.tech/auth" >> $GITHUB_ENV
+          echo "NEON_AUTH_COOKIE_SECRET=github-actions-ci-secret-32-chars-long" >> $GITHUB_ENV
+
+      - name: Generate Prisma Client
+        run: pnpm --filter jewellery-erp run db:generate
+
+      - name: Run Database Migrations
+        run: pnpm --filter jewellery-erp run db:migrate
+
+      - name: Seed Database
+        run: pnpm --filter jewellery-erp run db:seed
+
+      - name: Run Tests
+        run: pnpm --filter jewellery-erp test
