@@ -61,7 +61,7 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.9",
     "@playwright/test": "^1.49.1",
-    "autocannon": "^7.15.0",
+    "autocannon": "^8.0.0",
     "@types/autocannon": "^7.12.6"
   },
   "pnpm": {
