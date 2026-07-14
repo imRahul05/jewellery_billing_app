@@ -164,8 +164,5 @@ jobs:
         run: pnpm run db:generate
 
 
-      - name: Seed Database
-        run: pnpm run db:seed
-
       - name: Run Tests
         run: pnpm test
