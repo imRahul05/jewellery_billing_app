@@ -63,5 +63,14 @@
     "@playwright/test": "^1.49.1",
     "autocannon": "^7.15.0",
     "@types/autocannon": "^7.12.6"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "sharp",
+      "unrs-resolver"
+    ],
+    "onlyBuiltDependencies": [
+      "prisma"
+    ]
   }
 }
