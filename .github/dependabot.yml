@@ -9,7 +9,7 @@ updates:
       default-days: 15
 
   # Maintain dependencies for jewellery-erp
-  - package-ecosystem: "pnpm"
+  - package-ecosystem: "npm"
     directory: "/jewellery-erp"
     schedule:
       interval: "monthly"
