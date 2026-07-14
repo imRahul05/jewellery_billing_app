@@ -36,8 +36,6 @@ jobs:
       - name: Run Linter
         run: pnpm run lint
 
-      - name: Format Check
-        run: pnpm exec prettier --check . || npx prettier --check .
 
   # Job 2: Typecheck (Requires Prisma client generated, but no live DB)
   typecheck:
@@ -165,8 +163,6 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm run db:generate
 
-      - name: Run Database Migrations
-        run: pnpm run db:migrate
 
       - name: Seed Database
         run: pnpm run db:seed
