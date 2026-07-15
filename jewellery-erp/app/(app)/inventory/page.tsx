@@ -8,7 +8,7 @@ import Link from "next/link";
 import { useTenantStore } from "@/lib/stores/tenant-store";
 import { useCategories, useCreateCategory, useProducts, useCreateProduct } from "@/lib/query/hooks/use-inventory-catalogue";
 import { useInventoryItems, useCreateInventoryItem, useUploadAsset } from "@/lib/query/hooks/use-inventory-items";
-import { useSuppliers } from "@/lib/query/hooks/use-suppliers";
+import { useSuppliers, useCreateSupplier } from "@/lib/query/hooks/use-suppliers";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +62,16 @@ const AddItemSchema = z.object({
 
 type AddItemFormValues = z.infer<typeof AddItemSchema>;
 
+const AddSupplierSchema = z.object({
+  name: z.string().min(1, "Supplier name is required"),
+  phone: z.string().optional().nullable(),
+  email: z.string().email("Invalid email").or(z.literal("")).optional().nullable(),
+  gstin: z.string().optional().nullable(),
+  openingBalance: z.string().optional().nullable(),
+});
+
+type AddSupplierFormValues = z.infer<typeof AddSupplierSchema>;
+
 export default function InventoryDashboard() {
   const { tenantId } = useTenantStore();
   const tId = tenantId || "";
@@ -75,6 +85,7 @@ export default function InventoryDashboard() {
   const [categoryModal, setCategoryModal] = React.useState(false);
   const [productModal, setProductModal] = React.useState(false);
   const [itemModal, setItemModal] = React.useState(false);
+  const [quickSupplierModal, setQuickSupplierModal] = React.useState(false);
 
   // Queries
   const { data: categories, isLoading: categoriesLoading } = useCategories(tId);
@@ -104,6 +115,18 @@ export default function InventoryDashboard() {
   // Stock Item Form
   const itemForm = useForm({
     resolver: zodResolver(AddItemSchema),
+  });
+
+  // Quick Add Supplier Form
+  const supplierForm = useForm<AddSupplierFormValues>({
+    resolver: zodResolver(AddSupplierSchema),
+    defaultValues: {
+      name: "",
+      phone: "",
+      email: "",
+      gstin: "",
+      openingBalance: "0",
+    }
   });
 
   const onCategorySubmit = (values: AddCategoryFormValues) => {
@@ -185,6 +208,32 @@ export default function InventoryDashboard() {
         },
         onError: (err) => {
           toast.error(err.message || "Failed to add stock item.");
+        },
+      }
+    );
+  };
+
+  const { mutate: createSupplier, isPending: supplierCreating } = useCreateSupplier(tId);
+
+  const onSupplierSubmit = (values: AddSupplierFormValues) => {
+    createSupplier(
+      {
+        name: values.name,
+        phone: values.phone || undefined,
+        email: values.email || undefined,
+        gstin: values.gstin || undefined,
+        openingBalance: values.openingBalance || undefined,
+      },
+      {
+        onSuccess: (newSupplier) => {
+          toast.success("Supplier created successfully.");
+          // Automatically select the new supplier in the item form
+          itemForm.setValue("supplierId", newSupplier.id);
+          setQuickSupplierModal(false);
+          supplierForm.reset();
+        },
+        onError: (err) => {
+          toast.error(err.message || "Failed to create supplier.");
         },
       }
     );
@@ -390,13 +439,33 @@ export default function InventoryDashboard() {
                       ))}
                     </Select>
                   </div>
-                  <div className="space-y-1.5">
-                    <Select label="Supplier Vendor" {...itemForm.register("supplierId")}>
-                      <option value="">Internal Stock (No Supplier)</option>
-                      {suppliers?.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </Select>
+                  <div className="space-y-1.5 flex flex-col justify-end">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="itemSupplier" className="text-sm font-medium text-foreground">Supplier Vendor</Label>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <Select id="itemSupplier" {...itemForm.register("supplierId")}>
+                          <option value="">Internal Stock (No Supplier)</option>
+                          {suppliers?.map((s) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </Select>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 shrink-0"
+                        onClick={() => setQuickSupplierModal(true)}
+                        title="Quick Add Supplier"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Select the supplier vendor who provided this piece, or use &quot;+&quot; to register a new supplier.
+                    </p>
                   </div>
                 </div>
 
@@ -468,6 +537,54 @@ export default function InventoryDashboard() {
                   <Button type="submit" disabled={itemCreating || assetUploading}>
                     {itemCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Log Stock Item
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Quick Add Supplier Dialog */}
+          <Dialog open={quickSupplierModal} onOpenChange={setQuickSupplierModal}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Quick Add Supplier</DialogTitle>
+                <DialogDescription>Quickly register a new supplier vendor to associate with this stock item.</DialogDescription>
+              </DialogHeader>
+              <form onSubmit={supplierForm.handleSubmit(onSupplierSubmit)} className="space-y-4 py-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="quickSupplierName">Supplier Name</Label>
+                  <Input id="quickSupplierName" placeholder="Gold Palace Wholesalers" {...supplierForm.register("name")} />
+                  {supplierForm.formState.errors.name && <p className="text-xs text-destructive">{supplierForm.formState.errors.name.message}</p>}
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="quickSupplierPhone">Phone Number</Label>
+                    <Input id="quickSupplierPhone" placeholder="9876543210" {...supplierForm.register("phone")} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="quickSupplierGstin">GSTIN</Label>
+                    <Input id="quickSupplierGstin" placeholder="27AAAAA1111A1Z1" {...supplierForm.register("gstin")} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="quickSupplierEmail">Email Address</Label>
+                    <Input id="quickSupplierEmail" type="email" placeholder="contact@supplier.com" {...supplierForm.register("email")} />
+                    {supplierForm.formState.errors.email && <p className="text-xs text-destructive">{supplierForm.formState.errors.email.message}</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="quickSupplierBalance">Opening Balance (INR)</Label>
+                    <Input id="quickSupplierBalance" placeholder="0" {...supplierForm.register("openingBalance")} />
+                  </div>
+                </div>
+
+                <DialogFooter className="pt-2">
+                  <Button type="button" variant="outline" onClick={() => setQuickSupplierModal(false)}>Cancel</Button>
+                  <Button type="submit" disabled={supplierCreating}>
+                    {supplierCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Create Supplier
                   </Button>
                 </DialogFooter>
               </form>

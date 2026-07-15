@@ -10,7 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { useCustomers } from "@/lib/query/hooks/use-customers";
+import { useCustomers, useCreateCustomer } from "@/lib/query/hooks/use-customers";
 import { useInventoryItems } from "@/lib/query/hooks/use-inventory-items";
 import { useMetalRates } from "@/lib/query/hooks/use-metal-rates";
 import { useCreateInvoice, useFinalizeInvoice } from "@/lib/query/hooks/use-invoices";
@@ -37,9 +37,41 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
 
   const { mutateAsync: createInvoice } = useCreateInvoice(tId);
   const { mutateAsync: finalizeInvoice } = useFinalizeInvoice(tId);
+  const { mutateAsync: createCustomer } = useCreateCustomer(tId);
 
   // Step 1 Form Data
   const [customerId, setCustomerId] = useState<string>("");
+  const [customerMode, setCustomerMode] = useState<"walk_in" | "existing" | "new">("walk_in");
+  const [custSearch, setCustSearch] = useState<string>("");
+  const [custDropdownOpen, setCustDropdownOpen] = useState<boolean>(false);
+  const [newCustName, setNewCustName] = useState<string>("");
+  const [newCustPhone, setNewCustPhone] = useState<string>("");
+  const [newCustEmail, setNewCustEmail] = useState<string>("");
+  const [newCustGstin, setNewCustGstin] = useState<string>("");
+  const [newCustAddress, setNewCustAddress] = useState<string>("");
+
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // Click outside listener for searchable select dropdown
+  React.useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setCustDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredCustomers = React.useMemo(() => {
+    if (!custSearch) return customers;
+    const query = custSearch.toLowerCase();
+    return customers.filter(c => 
+      c.name.toLowerCase().includes(query) || 
+      (c.phone && c.phone.toLowerCase().includes(query))
+    );
+  }, [customers, custSearch]);
+
   const [invoiceDate, setInvoiceDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [dueDate] = useState<string>("");
   const [invoiceType, setInvoiceType] = useState<string>("sales");
@@ -79,8 +111,6 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
 
   const [invoiceDiscountType, setInvoiceDiscountType] = useState<"AMOUNT" | "PERCENT" | "NONE">("NONE");
   const [invoiceDiscountValue, setInvoiceDiscountValue] = useState<string>("0");
-
-
 
   // Sync Item Select with details
   const handleItemSelect = (itemId: string): void => {
@@ -161,8 +191,34 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
       return;
     }
 
+    if (customerMode === "existing" && !customerId) {
+      toast.error("Please select an existing customer.");
+      return;
+    }
+
+    if (customerMode === "new" && !newCustName.trim()) {
+      toast.error("Please enter a customer name for the new customer.");
+      return;
+    }
+
     try {
       setSubmitting(true);
+
+      let resolvedCustomerId: string | null = null;
+      if (customerMode === "existing") {
+        resolvedCustomerId = customerId;
+      } else if (customerMode === "new") {
+        toast.info("Registering new customer...");
+        const newCust = await createCustomer({
+          name: newCustName,
+          phone: newCustPhone || undefined,
+          email: newCustEmail || undefined,
+          gstin: newCustGstin || undefined,
+          addressJson: newCustAddress ? { street: newCustAddress } : undefined,
+        });
+        resolvedCustomerId = newCust.id;
+      }
+
       const oldGold: OldGoldExchangeInput | null = includeOldGold && oldGoldWeight && oldGoldPurityRate
         ? {
             netWeight: parseFloat(oldGoldWeight),
@@ -172,7 +228,7 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
         : null;
 
       const payload: InvoiceCreateInput = {
-        customerId: customerId || null,
+        customerId: resolvedCustomerId,
         invoiceDate: new Date(invoiceDate),
         dueDate: dueDate ? new Date(dueDate) : null,
         type: invoiceType as "sales" | "purchase" | "quotation" | "estimate" | "return" | "exchange" | "repair",
@@ -241,18 +297,173 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
             <CardTitle>Customer & Billing Settings</CardTitle>
             <CardDescription>Select customer and tax settings.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="customer">Customer</Label>
-                <Select id="customer" value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-                  <option value="">Walk-in Customer</option>
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ""}</option>
-                  ))}
-                </Select>
+          <CardContent className="space-y-6">
+            {/* Customer Selector Mode Tabs */}
+            <div className="space-y-2">
+              <Label>Customer Selection Mode</Label>
+              <div className="grid grid-cols-3 gap-2 p-1 bg-muted rounded-lg max-w-md">
+                <button
+                  type="button"
+                  className={`py-1.5 text-xs font-semibold rounded-md transition-all ${
+                    customerMode === "walk_in"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => {
+                    setCustomerMode("walk_in");
+                    setCustomerId("");
+                  }}
+                >
+                  Walk-in Customer
+                </button>
+                <button
+                  type="button"
+                  className={`py-1.5 text-xs font-semibold rounded-md transition-all ${
+                    customerMode === "existing"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => {
+                    setCustomerMode("existing");
+                    setCustomerId("");
+                    setCustSearch("");
+                  }}
+                >
+                  Existing Customer
+                </button>
+                <button
+                  type="button"
+                  className={`py-1.5 text-xs font-semibold rounded-md transition-all ${
+                    customerMode === "new"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => {
+                    setCustomerMode("new");
+                    setCustomerId("");
+                  }}
+                >
+                  New Customer
+                </button>
               </div>
+            </div>
 
+            {/* Conditional Customer Inputs */}
+            {customerMode === "walk_in" && (
+              <div className="p-4 border border-dashed rounded-lg bg-muted/20 text-xs text-muted-foreground">
+                Selected: <strong className="text-foreground">Walk-in Customer</strong>. No customer profile will be created or linked.
+              </div>
+            )}
+
+            {customerMode === "existing" && (
+              <div className="space-y-2 relative" ref={dropdownRef}>
+                <Label htmlFor="cust-search">Search Existing Customer</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="cust-search"
+                    placeholder="Search by Name or Mobile Number..."
+                    value={custSearch}
+                    onChange={(e) => {
+                      setCustSearch(e.target.value);
+                      setCustDropdownOpen(true);
+                    }}
+                    onFocus={() => setCustDropdownOpen(true)}
+                  />
+                  {customerId && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setCustomerId("");
+                        setCustSearch("");
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+                {custDropdownOpen && (
+                  <div className="absolute z-10 w-full mt-1 bg-popover text-popover-foreground border rounded-md shadow-md max-h-60 overflow-y-auto">
+                    {filteredCustomers.length === 0 ? (
+                      <div className="p-3 text-sm text-muted-foreground text-center">No customers match your search.</div>
+                    ) : (
+                      filteredCustomers.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground border-b last:border-b-0 transition-colors"
+                          onClick={() => {
+                            setCustomerId(c.id);
+                            setCustSearch(`${c.name} ${c.phone ? `(${c.phone})` : ""}`);
+                            setCustDropdownOpen(false);
+                          }}
+                        >
+                          <div className="font-semibold">{c.name}</div>
+                          {c.phone && <div className="text-xs text-muted-foreground">Mobile: {c.phone}</div>}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {customerMode === "new" && (
+              <div className="border p-4 rounded-lg bg-muted/10 space-y-4">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">New Customer Registration</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-name">Full Name <span className="text-destructive">*</span></Label>
+                    <Input
+                      id="new-name"
+                      placeholder="e.g. Rahul Sharma"
+                      value={newCustName}
+                      onChange={(e) => setNewCustName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-phone">Phone Number</Label>
+                    <Input
+                      id="new-phone"
+                      placeholder="e.g. 9876543210"
+                      value={newCustPhone}
+                      onChange={(e) => setNewCustPhone(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-email">Email Address</Label>
+                    <Input
+                      id="new-email"
+                      type="email"
+                      placeholder="e.g. rahul@example.com"
+                      value={newCustEmail}
+                      onChange={(e) => setNewCustEmail(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-gstin">GSTIN</Label>
+                    <Input
+                      id="new-gstin"
+                      placeholder="e.g. 27AAAAA1111A1Z1"
+                      value={newCustGstin}
+                      onChange={(e) => setNewCustGstin(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="new-address">Postal Address</Label>
+                  <Input
+                    id="new-address"
+                    placeholder="e.g. Flat 101, Park Avenue, Mumbai"
+                    value={newCustAddress}
+                    onChange={(e) => setNewCustAddress(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Other Billing Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-muted">
               <div className="space-y-2">
                 <Label htmlFor="supply">Place of Supply (GST State Code)</Label>
                 <Input
