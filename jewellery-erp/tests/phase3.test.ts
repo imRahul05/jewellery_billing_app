@@ -348,4 +348,73 @@ describe("Phase 3 Billing Engine and GST Integration Tests", () => {
       }
     );
   }, 20000);
+
+  test("finalization succeeds when no active metal rate exists in settings (uses manual rate from form)", async () => {
+    await runWithTenant(
+      { tenantId, userId: ownerUserId, isSuperAdmin: false },
+      async () => {
+        const { POST: createInvoiceRoute } = await import("@/app/api/v1/invoices/route");
+        const { POST: finalizeInvoiceRoute } = await import("@/app/api/v1/invoices/[id]/finalize/route");
+
+        // We use a purity/metal combination that has no metal rate configured in the database, e.g., platinum
+        const reqPayload = {
+          customerId: null,
+          invoiceDate: new Date().toISOString(),
+          dueDate: null,
+          type: "sales",
+          placeOfSupply: "27",
+          invoiceDiscountType: "NONE",
+          invoiceDiscountValue: 0,
+          notes: "Platinum manual rate test",
+          lines: [
+            {
+              description: "Platinum Ring",
+              materialType: "platinum",
+              grossWeight: 5.000,
+              stoneWeight: 0.000,
+              purity: 950,
+              karat: 24,
+              metalRatePerGram: 5000,
+              makingChargeType: "PER_GRAM",
+              makingChargeValue: 500,
+              wastageType: "NONE",
+              wastageValue: 0,
+              stoneChargeType: "NONE",
+              stoneCarat: 0,
+              stonePieces: 0,
+              stoneRate: 0,
+              hallmarkCharges: 0,
+              otherCharges: 0,
+              lineDiscountType: "NONE",
+              lineDiscountValue: 0,
+            }
+          ]
+        };
+
+        const createReq = new Request("http://localhost/api/v1/invoices", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(reqPayload),
+        });
+
+        const createRes = await createInvoiceRoute(createReq);
+        expect(createRes.status).toBe(201);
+        const createBody = await createRes.json();
+        const draftInvoice = createBody.data;
+
+        // Finalize the invoice
+        const finalizeReq = new Request(`http://localhost/api/v1/invoices/${draftInvoice.id}/finalize`, {
+          method: "POST",
+        });
+        const finalizeRes = await finalizeInvoiceRoute(finalizeReq, { params: Promise.resolve({ id: draftInvoice.id }) });
+        expect(finalizeRes.status).toBe(200);
+        const finalizeBody = await finalizeRes.json();
+        const finalInvoice = finalizeBody.data;
+
+        // Verify totals: metal value = 5 * 5000 = 25000, making charge = 5 * 500 = 2500, total taxable = 27500. GST = 3% = 825. Grand total = 28325.
+        expect(finalInvoice.grandTotal).toBe("28325");
+        expect(finalInvoice.status).toBe("issued");
+      }
+    );
+  }, 20000);
 });

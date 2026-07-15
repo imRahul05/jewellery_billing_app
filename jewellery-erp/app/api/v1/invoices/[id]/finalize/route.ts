@@ -54,7 +54,7 @@ export async function POST(
         let metalRatePerGram = line.ratePerGram;
         let metalRateId = line.metalRateId;
 
-        // If rate id is missing, attempt lookup
+        // If rate id is missing, attempt lookup but do not fail if no rate exists in settings
         if ((line.metalType === "gold" || line.metalType === "silver" || line.metalType === "platinum") && !metalRateId) {
           const rateRow = await prisma.metalRate.findFirst({
             where: {
@@ -67,14 +67,13 @@ export async function POST(
             orderBy: { rateDate: "desc" },
           });
 
-          if (!rateRow) {
-            return NextResponse.json(
-              { error: `No active metal rate found for ${line.metalType} at purity ${line.purityFineness} on or before ${invoice.invoiceDate.toISOString().split("T")[0]}` },
-              { status: 400 }
-            );
+          if (rateRow) {
+            metalRateId = rateRow.id;
+            // Only fallback to settings rate if the line item rate is zero
+            if (line.ratePerGram.equals(0)) {
+              metalRatePerGram = rateRow.ratePerGram;
+            }
           }
-          metalRateId = rateRow.id;
-          metalRatePerGram = rateRow.ratePerGram;
         }
 
         // Parse line inputs to feed the calculator
