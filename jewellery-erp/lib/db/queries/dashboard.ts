@@ -132,7 +132,7 @@ export async function getDashboardStatsQuery(tenantId: string): Promise<Dashboar
     let monthSales = new Prisma.Decimal(0);
 
     for (const inv of monthInvoices) {
-      if (inv.status === "cancelled" || inv.status === "void") continue;
+      if (inv.status === "cancelled" || inv.status === "void" || inv.status === "draft") continue;
       if (inv.type !== "sales") continue;
 
       monthSales = monthSales.add(inv.grandTotal);
@@ -194,7 +194,7 @@ export async function getDashboardStatsQuery(tenantId: string): Promise<Dashboar
 
       let dayTotal = new Prisma.Decimal(0);
       for (const inv of monthInvoices) {
-        if (inv.status === "cancelled" || inv.status === "void") continue;
+        if (inv.status === "cancelled" || inv.status === "void" || inv.status === "draft") continue;
         if (inv.type !== "sales") continue;
 
         const invTime = inv.invoiceDate.getTime();

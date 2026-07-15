@@ -99,13 +99,15 @@ const styles = StyleSheet.create({
     padding: 5,
     alignItems: "center",
   },
-  colDesc: { width: "25%" },
-  colHsn: { width: "10%", textAlign: "center" },
-  colWeight: { width: "15%", textAlign: "right" },
-  colRate: { width: "12%", textAlign: "right" },
+  colDesc: { width: "20%" },
+  colKarat: { width: "8%", textAlign: "center" },
+  colWeight: { width: "14%", textAlign: "right" },
+  colRate: { width: "10%", textAlign: "right" },
   colMaking: { width: "10%", textAlign: "right" },
-  colTaxable: { width: "13%", textAlign: "right" },
-  colGst: { width: "15%", textAlign: "right" },
+  colStone: { width: "10%", textAlign: "right" },
+  colDiscount: { width: "10%", textAlign: "right" },
+  colTaxable: { width: "10%", textAlign: "right" },
+  colGst: { width: "8%", textAlign: "right" },
   summaryContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -228,11 +230,13 @@ export const InvoicePdfDocument: React.FC<InvoicePdfProps> = ({
         <View style={styles.table}>
           <View style={styles.tableHeader}>
             <Text style={styles.colDesc}>Item Description</Text>
-            <Text style={styles.colHsn}>HSN</Text>
+            <Text style={styles.colKarat}>Karat</Text>
             <Text style={styles.colWeight}>Weight (Grs)</Text>
             <Text style={styles.colRate}>Rate</Text>
             <Text style={styles.colMaking}>Making</Text>
-            <Text style={styles.colTaxable}>Taxable Val</Text>
+            <Text style={styles.colStone}>Stone</Text>
+            <Text style={styles.colDiscount}>Discount</Text>
+            <Text style={styles.colTaxable}>Taxable</Text>
             <Text style={styles.colGst}>GST</Text>
           </View>
 
@@ -240,18 +244,22 @@ export const InvoicePdfDocument: React.FC<InvoicePdfProps> = ({
             const cgst = parseFloat(line.cgstAmount);
             const sgst = parseFloat(line.sgstAmount);
             const igst = parseFloat(line.igstAmount);
-            const lineGst = igst > 0 ? `INR ${igst.toFixed(2)}` : `INR ${(cgst + sgst).toFixed(2)}`;
+            const lineGst = igst > 0 ? `${igst.toFixed(2)}` : `${(cgst + sgst).toFixed(2)}`;
 
             return (
               <View style={styles.tableRow} key={line.id || index}>
                 <Text style={styles.colDesc}>{line.description}</Text>
-                <Text style={styles.colHsn}>{line.hsnCodeId || "7113"}</Text>
-                <Text style={styles.colWeight}>
-                  {parseFloat(line.grossWeight).toFixed(3)}g (Net: {parseFloat(line.netWeight).toFixed(3)}g)
+                <Text style={styles.colKarat}>
+                  {line.karat ? `${line.karat}K` : line.purityFineness ? `${parseFloat(line.purityFineness)}` : "-"}
                 </Text>
-                <Text style={styles.colRate}>INR {parseFloat(line.ratePerGram).toFixed(2)}</Text>
-                <Text style={styles.colMaking}>INR {parseFloat(line.makingCharge).toFixed(2)}</Text>
-                <Text style={styles.colTaxable}>INR {parseFloat(line.taxableValue).toFixed(2)}</Text>
+                <Text style={styles.colWeight}>
+                  G: {parseFloat(line.grossWeight).toFixed(3)}g{"\n"}N: {parseFloat(line.netWeight).toFixed(3)}g
+                </Text>
+                <Text style={styles.colRate}>{parseFloat(line.ratePerGram).toFixed(2)}</Text>
+                <Text style={styles.colMaking}>{parseFloat(line.makingCharge).toFixed(2)}</Text>
+                <Text style={styles.colStone}>{parseFloat(line.stoneCharge).toFixed(2)}</Text>
+                <Text style={styles.colDiscount}>-{parseFloat(line.discount).toFixed(2)}</Text>
+                <Text style={styles.colTaxable}>{parseFloat(line.taxableValue).toFixed(2)}</Text>
                 <Text style={styles.colGst}>{lineGst}</Text>
               </View>
             );
@@ -303,6 +311,14 @@ export const InvoicePdfDocument: React.FC<InvoicePdfProps> = ({
               <Text style={{ fontFamily: "Helvetica-Bold" }}>Grand Total:</Text>
               <Text style={{ fontFamily: "Helvetica-Bold" }}>INR {invoice.grandTotal}</Text>
             </View>
+            {invoice.payments?.filter((p) => p.method === "gold_exchange").map((p, idx) => (
+              <View style={styles.totalRow} key={p.id || idx}>
+                <Text style={styles.regularText}>
+                  Old Gold Deduction ({p.exchangeMetalWeight ? parseFloat(p.exchangeMetalWeight).toFixed(3) : "0.000"}g):
+                </Text>
+                <Text style={styles.boldText}>-INR {parseFloat(p.exchangeMetalValue || p.amount).toFixed(2)}</Text>
+              </View>
+            ))}
           </View>
         </View>
 

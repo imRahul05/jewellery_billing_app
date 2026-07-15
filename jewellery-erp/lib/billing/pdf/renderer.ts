@@ -77,6 +77,7 @@ export async function generateAndStoreInvoicePdf(
     include: {
       lineItems: true,
       customer: true,
+      payments: true,
     },
   });
 
