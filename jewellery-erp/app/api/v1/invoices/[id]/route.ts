@@ -81,7 +81,7 @@ export async function PUT(
       const resolvedLinesInput: LineItemInput[] = [];
       for (const line of input.lines) {
         let metalRateId: string | null = null;
-        let resolvedRate = new Prisma.Decimal(line.metalRatePerGram);
+        const resolvedRate = new Prisma.Decimal(line.metalRatePerGram);
 
         if (line.materialType === "gold" || line.materialType === "silver" || line.materialType === "platinum") {
           const rateRow = await prisma.metalRate.findFirst({
@@ -97,7 +97,6 @@ export async function PUT(
 
           if (rateRow) {
             metalRateId = rateRow.id;
-            resolvedRate = rateRow.ratePerGram;
           }
         }
 
@@ -216,6 +215,7 @@ export async function PUT(
           },
           include: {
             lineItems: true,
+            payments: true,
           },
         });
 

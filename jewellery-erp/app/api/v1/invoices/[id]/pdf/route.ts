@@ -22,6 +22,7 @@ export async function GET(
         include: {
           lineItems: true,
           customer: true,
+          payments: true,
         },
       });
 

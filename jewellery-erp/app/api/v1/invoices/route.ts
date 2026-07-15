@@ -4,7 +4,7 @@ import { runWithTenant } from "@/lib/db/tenant-context";
 import { prisma } from "@/lib/db";
 import { InvoiceCreateSchema } from "@/lib/billing/validation";
 import { calculateInvoice, type LineItemInput } from "@/lib/billing/calculator";
-import { Prisma, Invoice, InvoiceLineItem, MetalType, InvoiceStatus, InvoiceType } from "@prisma/client";
+import { Prisma, Invoice, InvoiceLineItem, MetalType, InvoiceStatus, InvoiceType, Payment } from "@prisma/client";
 import { revalidateTag } from "next/cache";
 
 
@@ -32,6 +32,22 @@ export interface SerializedInvoiceLineItem {
   sgstAmount: string;
   igstAmount: string;
   lineTotal: string;
+}
+
+export interface SerializedPayment {
+  id: string;
+  tenantId: string;
+  invoiceId: string | null;
+  customerId: string | null;
+  amount: string;
+  method: string;
+  status: string;
+  referenceNo: string | null;
+  exchangeMetalWeight: string | null;
+  exchangeMetalValue: string | null;
+  paidAt: string;
+  receivedBy: string | null;
+  createdAt: string;
 }
 
 export interface SerializedInvoice {
@@ -63,6 +79,25 @@ export interface SerializedInvoice {
   createdAt: string;
   updatedAt: string;
   lineItems?: SerializedInvoiceLineItem[];
+  payments?: SerializedPayment[];
+}
+
+export function serializePayment(p: Payment): SerializedPayment {
+  return {
+    id: p.id,
+    tenantId: p.tenantId,
+    invoiceId: p.invoiceId,
+    customerId: p.customerId,
+    amount: p.amount.toString(),
+    method: p.method,
+    status: p.status,
+    referenceNo: p.referenceNo,
+    exchangeMetalWeight: p.exchangeMetalWeight ? p.exchangeMetalWeight.toString() : null,
+    exchangeMetalValue: p.exchangeMetalValue ? p.exchangeMetalValue.toString() : null,
+    paidAt: p.paidAt.toISOString(),
+    receivedBy: p.receivedBy,
+    createdAt: p.createdAt.toISOString(),
+  };
 }
 
 export function serializeInvoiceLineItem(item: InvoiceLineItem): SerializedInvoiceLineItem {
@@ -94,7 +129,7 @@ export function serializeInvoiceLineItem(item: InvoiceLineItem): SerializedInvoi
 }
 
 export function serializeInvoice(
-  inv: Invoice & { lineItems?: InvoiceLineItem[] }
+  inv: Invoice & { lineItems?: InvoiceLineItem[]; payments?: Payment[] }
 ): SerializedInvoice {
   return {
     id: inv.id,
@@ -125,6 +160,7 @@ export function serializeInvoice(
     createdAt: inv.createdAt.toISOString(),
     updatedAt: inv.updatedAt.toISOString(),
     lineItems: inv.lineItems?.map(serializeInvoiceLineItem),
+    payments: inv.payments?.map(serializePayment),
   };
 }
 
@@ -145,6 +181,9 @@ export async function GET(request: Request): Promise<NextResponse> {
           customerId: customerId,
           status: status as InvoiceStatus,
           type: type as InvoiceType,
+        },
+        include: {
+          payments: true,
         },
         orderBy: { createdAt: "desc" },
         take: limit,
@@ -184,7 +223,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       const resolvedLinesInput: LineItemInput[] = [];
       for (const line of input.lines) {
         let metalRateId: string | null = null;
-        let resolvedRate = new Prisma.Decimal(line.metalRatePerGram);
+        const resolvedRate = new Prisma.Decimal(line.metalRatePerGram);
 
         if (line.materialType === "gold" || line.materialType === "silver" || line.materialType === "platinum") {
           // Look up rate date closest to invoiceDate (on or before)
@@ -201,7 +240,6 @@ export async function POST(request: Request): Promise<NextResponse> {
 
           if (rateRow) {
             metalRateId = rateRow.id;
-            resolvedRate = rateRow.ratePerGram;
           }
         }
 
@@ -295,6 +333,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           },
           include: {
             lineItems: true,
+            payments: true,
           },
         });
 

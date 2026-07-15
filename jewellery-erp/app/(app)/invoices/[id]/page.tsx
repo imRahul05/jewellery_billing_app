@@ -10,10 +10,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { useInvoiceDetail, useFinalizeInvoice, useCancelInvoice, useProcessReturn } from "@/lib/query/hooks/use-invoices";
+import { useInvoiceDetail, useFinalizeInvoice, useCancelInvoice, useProcessReturn, useDeleteInvoice } from "@/lib/query/hooks/use-invoices";
 import { useTenantStore } from "@/lib/stores/tenant-store";
 import { invoiceApi, ReturnInvoiceInput } from "@/lib/api/invoices.api";
-import { FileText, ArrowLeft, CreditCard, Ban, Undo2, CheckCircle } from "lucide-react";
+import { FileText, ArrowLeft, CreditCard, Ban, Undo2, CheckCircle, Trash2 } from "lucide-react";
 
 export default function InvoiceDetailPage({
   params,
@@ -32,8 +32,9 @@ export default function InvoiceDetailPage({
   const { mutateAsync: finalizeInvoice, isPending: finalizing } = useFinalizeInvoice(tId);
   const { mutateAsync: cancelInvoice, isPending: cancelling } = useCancelInvoice(tId);
   const { mutateAsync: processReturn, isPending: returning } = useProcessReturn(tId);
+  const { mutateAsync: deleteInvoice, isPending: deleting } = useDeleteInvoice(tId);
 
-  const actionLoading = finalizing || cancelling || returning;
+  const actionLoading = finalizing || cancelling || returning || deleting;
 
   // Return mode state
   const isReturnMode = searchParams.get("return") === "true";
@@ -52,6 +53,20 @@ export default function InvoiceDetailPage({
       toast.success("Invoice finalized and sequence number assigned!");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to finalize invoice";
+      toast.error(msg);
+    }
+  };
+
+  const handleDiscard = async (): Promise<void> => {
+    if (!window.confirm("Are you sure you want to discard this draft invoice? This action cannot be undone.")) {
+      return;
+    }
+    try {
+      await deleteInvoice(id);
+      toast.success("Draft invoice discarded successfully!");
+      router.push("/invoices");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to discard draft invoice";
       toast.error(msg);
     }
   };
@@ -161,6 +176,12 @@ export default function InvoiceDetailPage({
           {invoice.status === "draft" && (
             <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold" onClick={handleFinalize} disabled={actionLoading}>
               <CheckCircle className="mr-2 h-4 w-4" /> Finalize & Issue
+            </Button>
+          )}
+
+          {invoice.status === "draft" && (
+            <Button variant="destructive" onClick={handleDiscard} disabled={actionLoading}>
+              <Trash2 className="mr-2 h-4 w-4" /> Discard Draft
             </Button>
           )}
 
@@ -281,9 +302,12 @@ export default function InvoiceDetailPage({
                   <TableHeader>
                     <TableRow>
                       <TableHead>Description</TableHead>
-                      <TableHead className="text-right">Gross Wt</TableHead>
-                      <TableHead className="text-right">Net Wt</TableHead>
+                      <TableHead className="text-center">Karat / Purity</TableHead>
+                      <TableHead className="text-right">Gross / Net Wt</TableHead>
                       <TableHead className="text-right">Rate / Gram</TableHead>
+                      <TableHead className="text-right">Making</TableHead>
+                      <TableHead className="text-right">Stone</TableHead>
+                      <TableHead className="text-right">Discount</TableHead>
                       <TableHead className="text-right">Taxable Val</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -291,9 +315,17 @@ export default function InvoiceDetailPage({
                     {invoice.lineItems?.map((line) => (
                       <TableRow key={line.id}>
                         <TableCell className="font-medium">{line.description}</TableCell>
-                        <TableCell className="text-right">{parseFloat(line.grossWeight).toFixed(3)}g</TableCell>
-                        <TableCell className="text-right">{parseFloat(line.netWeight).toFixed(3)}g</TableCell>
+                        <TableCell className="text-center">
+                          {line.karat ? `${line.karat}K` : line.purityFineness ? `${parseFloat(line.purityFineness)}` : "-"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {parseFloat(line.grossWeight).toFixed(3)}g
+                          <span className="block text-xs text-muted-foreground">Net: {parseFloat(line.netWeight).toFixed(3)}g</span>
+                        </TableCell>
                         <TableCell className="text-right">₹{parseFloat(line.ratePerGram).toFixed(2)}</TableCell>
+                        <TableCell className="text-right">₹{parseFloat(line.makingCharge).toFixed(2)}</TableCell>
+                        <TableCell className="text-right">₹{parseFloat(line.stoneCharge).toFixed(2)}</TableCell>
+                        <TableCell className="text-right text-rose-600">-₹{parseFloat(line.discount).toFixed(2)}</TableCell>
                         <TableCell className="text-right font-semibold text-slate-800">₹{parseFloat(line.taxableValue).toFixed(2)}</TableCell>
                       </TableRow>
                     ))}
@@ -341,6 +373,12 @@ export default function InvoiceDetailPage({
                 <span>Grand Total:</span>
                 <span>₹{parseFloat(invoice.grandTotal).toFixed(2)}</span>
               </div>
+              {invoice.payments?.filter((p) => p.method === "gold_exchange").map((p) => (
+                <div key={p.id} className="flex justify-between text-sm text-emerald-600 font-medium">
+                  <span>Old Gold Exchange ({p.exchangeMetalWeight ? parseFloat(p.exchangeMetalWeight).toFixed(3) : "0.000"}g):</span>
+                  <span>-₹{parseFloat(p.exchangeMetalValue || p.amount).toFixed(2)}</span>
+                </div>
+              ))}
               <div className="flex justify-between border-t pt-2 text-sm font-semibold text-emerald-600">
                 <span>Amount Paid:</span>
                 <span>₹{parseFloat(invoice.amountPaid).toFixed(2)}</span>
