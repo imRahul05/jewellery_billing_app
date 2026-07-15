@@ -54,7 +54,7 @@ export async function POST(
         let metalRatePerGram = line.ratePerGram;
         let metalRateId = line.metalRateId;
 
-        // If rate id is missing, attempt lookup
+        // If rate id is missing, attempt lookup but do not fail if no rate exists in settings
         if ((line.metalType === "gold" || line.metalType === "silver" || line.metalType === "platinum") && !metalRateId) {
           const rateRow = await prisma.metalRate.findFirst({
             where: {
@@ -67,14 +67,13 @@ export async function POST(
             orderBy: { rateDate: "desc" },
           });
 
-          if (!rateRow) {
-            return NextResponse.json(
-              { error: `No active metal rate found for ${line.metalType} at purity ${line.purityFineness} on or before ${invoice.invoiceDate.toISOString().split("T")[0]}` },
-              { status: 400 }
-            );
+          if (rateRow) {
+            metalRateId = rateRow.id;
+            // Only fallback to settings rate if the line item rate is zero
+            if (line.ratePerGram.equals(0)) {
+              metalRatePerGram = rateRow.ratePerGram;
+            }
           }
-          metalRateId = rateRow.id;
-          metalRatePerGram = rateRow.ratePerGram;
         }
 
         // Parse line inputs to feed the calculator
@@ -154,13 +153,27 @@ export async function POST(
           }
         }
 
-        // Calculate amount paid (including previously recorded payments)
-        const totalPaymentsSum = invoice.payments.reduce((sum, p) => sum.add(p.amount), new Prisma.Decimal(0));
-        const balanceDue = calcResult.grandTotal.sub(totalPaymentsSum);
+        // Calculate amount paid (excluding gold_exchange payments)
+        const nonGoldPaymentsSum = invoice.payments
+          .filter((p) => p.method !== "gold_exchange")
+          .reduce((sum, p) => sum.add(p.amount), new Prisma.Decimal(0));
+
+        const balanceDue = calcResult.grandTotal.sub(nonGoldPaymentsSum);
         let finalStatus = "issued";
-        if (totalPaymentsSum.greaterThan(0)) {
-          finalStatus = totalPaymentsSum.greaterThanOrEqualTo(calcResult.grandTotal) ? "paid" : "partially_paid";
+        if (nonGoldPaymentsSum.greaterThan(0)) {
+          finalStatus = nonGoldPaymentsSum.greaterThanOrEqualTo(calcResult.grandTotal) ? "paid" : "partially_paid";
+        } else if (calcResult.grandTotal.equals(0)) {
+          finalStatus = "paid";
         }
+
+        // Invalidate cached PDF
+        await tx.fileAsset.deleteMany({
+          where: {
+            tenantId: session.tenantId,
+            purpose: "invoice_pdf",
+            r2Key: `${session.tenantId}/invoices/${id}.pdf`,
+          },
+        });
 
         // b. Update invoice status to finalized/issued
         const updatedInvoice = await tx.invoice.update({
@@ -174,6 +187,7 @@ export async function POST(
             igstTotal: calcResult.totalIgst,
             roundOff: calcResult.roundOff,
             grandTotal: calcResult.grandTotal,
+            amountPaid: nonGoldPaymentsSum,
             balanceDue,
           },
           include: {

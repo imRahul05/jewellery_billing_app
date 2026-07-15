@@ -113,7 +113,7 @@ export async function getReportsQuery(
     let igstTotal = new Prisma.Decimal(0);
 
     for (const inv of invoices) {
-      if (inv.status === "cancelled" || inv.status === "void") continue;
+      if (inv.status === "cancelled" || inv.status === "void" || inv.status === "draft") continue;
 
       if (inv.type === "sales") {
         salesCount++;

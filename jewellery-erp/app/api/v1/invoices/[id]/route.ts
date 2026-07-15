@@ -81,7 +81,7 @@ export async function PUT(
       const resolvedLinesInput: LineItemInput[] = [];
       for (const line of input.lines) {
         let metalRateId: string | null = null;
-        let resolvedRate = new Prisma.Decimal(line.metalRatePerGram);
+        const resolvedRate = new Prisma.Decimal(line.metalRatePerGram);
 
         if (line.materialType === "gold" || line.materialType === "silver" || line.materialType === "platinum") {
           const rateRow = await prisma.metalRate.findFirst({
@@ -97,7 +97,6 @@ export async function PUT(
 
           if (rateRow) {
             metalRateId = rateRow.id;
-            resolvedRate = rateRow.ratePerGram;
           }
         }
 
@@ -143,7 +142,6 @@ export async function PUT(
         });
 
         // Re-create old gold payment if provided
-        let amountPaid = new Prisma.Decimal(0);
         if (input.oldGoldExchange) {
           await tx.payment.create({
             data: {
@@ -158,8 +156,16 @@ export async function PUT(
               receivedBy: session.userId,
             },
           });
-          amountPaid = oldGoldValue;
         }
+
+        // Invalidate cached PDF
+        await tx.fileAsset.deleteMany({
+          where: {
+            tenantId: session.tenantId,
+            purpose: "invoice_pdf",
+            r2Key: `${session.tenantId}/invoices/${id}.pdf`,
+          },
+        });
 
         // Update main invoice
         const inv = await tx.invoice.update({
@@ -181,8 +187,8 @@ export async function PUT(
             igstTotal: calcResult.totalIgst,
             roundOff: calcResult.roundOff,
             grandTotal: calcResult.grandTotal,
-            amountPaid,
-            balanceDue: calcResult.grandTotal.sub(amountPaid),
+            amountPaid: new Prisma.Decimal(0.0),
+            balanceDue: calcResult.grandTotal,
             notes: input.notes || null,
             lineItems: {
               create: calcResult.lines.map((l, index) => {
@@ -216,6 +222,7 @@ export async function PUT(
           },
           include: {
             lineItems: true,
+            payments: true,
           },
         });
 

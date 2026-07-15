@@ -10,10 +10,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { useInvoiceDetail, useFinalizeInvoice, useCancelInvoice, useProcessReturn } from "@/lib/query/hooks/use-invoices";
+import { useInvoiceDetail, useFinalizeInvoice, useCancelInvoice, useProcessReturn, useDeleteInvoice } from "@/lib/query/hooks/use-invoices";
+import { useBusinessSettings } from "@/lib/query/hooks/use-business-settings";
 import { useTenantStore } from "@/lib/stores/tenant-store";
 import { invoiceApi, ReturnInvoiceInput } from "@/lib/api/invoices.api";
-import { FileText, ArrowLeft, CreditCard, Ban, Undo2, CheckCircle } from "lucide-react";
+import { InvoicePreviewDialog } from "@/components/billing/invoice-preview-dialog";
+import { FileText, ArrowLeft, CreditCard, Ban, Undo2, CheckCircle, Trash2, Eye } from "lucide-react";
 
 export default function InvoiceDetailPage({
   params,
@@ -29,16 +31,21 @@ export default function InvoiceDetailPage({
 
   // React Query Hooks
   const { data: invoice, isLoading: loading } = useInvoiceDetail(tId, id);
+  const { data: settings } = useBusinessSettings(tId);
   const { mutateAsync: finalizeInvoice, isPending: finalizing } = useFinalizeInvoice(tId);
   const { mutateAsync: cancelInvoice, isPending: cancelling } = useCancelInvoice(tId);
   const { mutateAsync: processReturn, isPending: returning } = useProcessReturn(tId);
+  const { mutateAsync: deleteInvoice, isPending: deleting } = useDeleteInvoice(tId);
 
-  const actionLoading = finalizing || cancelling || returning;
+  const actionLoading = finalizing || cancelling || returning || deleting;
 
   // Return mode state
   const isReturnMode = searchParams.get("return") === "true";
   const [returnReason, setReturnReason] = useState<string>("");
   const [returnQuantities, setReturnQuantities] = useState<Record<string, number>>({});
+
+  // Preview dialog state
+  const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
 
   // Cancel dialog state
   const [cancelReason, setCancelReason] = useState<string>("");
@@ -52,6 +59,20 @@ export default function InvoiceDetailPage({
       toast.success("Invoice finalized and sequence number assigned!");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to finalize invoice";
+      toast.error(msg);
+    }
+  };
+
+  const handleDiscard = async (): Promise<void> => {
+    if (!window.confirm("Are you sure you want to discard this draft invoice? This action cannot be undone.")) {
+      return;
+    }
+    try {
+      await deleteInvoice(id);
+      toast.success("Draft invoice discarded successfully!");
+      router.push("/invoices");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to discard draft invoice";
       toast.error(msg);
     }
   };
@@ -154,6 +175,10 @@ export default function InvoiceDetailPage({
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setIsPreviewOpen(true)}>
+            <Eye className="mr-2 h-4 w-4" /> Preview Bill
+          </Button>
+
           <Button variant="outline" onClick={handleDownloadPdf}>
             <FileText className="mr-2 h-4 w-4" /> Download PDF
           </Button>
@@ -161,6 +186,12 @@ export default function InvoiceDetailPage({
           {invoice.status === "draft" && (
             <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold" onClick={handleFinalize} disabled={actionLoading}>
               <CheckCircle className="mr-2 h-4 w-4" /> Finalize & Issue
+            </Button>
+          )}
+
+          {invoice.status === "draft" && (
+            <Button variant="destructive" onClick={handleDiscard} disabled={actionLoading}>
+              <Trash2 className="mr-2 h-4 w-4" /> Discard Draft
             </Button>
           )}
 
@@ -281,9 +312,12 @@ export default function InvoiceDetailPage({
                   <TableHeader>
                     <TableRow>
                       <TableHead>Description</TableHead>
-                      <TableHead className="text-right">Gross Wt</TableHead>
-                      <TableHead className="text-right">Net Wt</TableHead>
+                      <TableHead className="text-center">Karat / Purity</TableHead>
+                      <TableHead className="text-right">Gross / Net Wt</TableHead>
                       <TableHead className="text-right">Rate / Gram</TableHead>
+                      <TableHead className="text-right">Making</TableHead>
+                      <TableHead className="text-right">Stone</TableHead>
+                      <TableHead className="text-right">Discount</TableHead>
                       <TableHead className="text-right">Taxable Val</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -291,9 +325,17 @@ export default function InvoiceDetailPage({
                     {invoice.lineItems?.map((line) => (
                       <TableRow key={line.id}>
                         <TableCell className="font-medium">{line.description}</TableCell>
-                        <TableCell className="text-right">{parseFloat(line.grossWeight).toFixed(3)}g</TableCell>
-                        <TableCell className="text-right">{parseFloat(line.netWeight).toFixed(3)}g</TableCell>
+                        <TableCell className="text-center">
+                          {line.karat ? `${line.karat}K` : line.purityFineness ? `${parseFloat(line.purityFineness)}` : "-"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {parseFloat(line.grossWeight).toFixed(3)}g
+                          <span className="block text-xs text-muted-foreground">Net: {parseFloat(line.netWeight).toFixed(3)}g</span>
+                        </TableCell>
                         <TableCell className="text-right">₹{parseFloat(line.ratePerGram).toFixed(2)}</TableCell>
+                        <TableCell className="text-right">₹{parseFloat(line.makingCharge).toFixed(2)}</TableCell>
+                        <TableCell className="text-right">₹{parseFloat(line.stoneCharge).toFixed(2)}</TableCell>
+                        <TableCell className="text-right text-rose-600">-₹{parseFloat(line.discount).toFixed(2)}</TableCell>
                         <TableCell className="text-right font-semibold text-slate-800">₹{parseFloat(line.taxableValue).toFixed(2)}</TableCell>
                       </TableRow>
                     ))}
@@ -306,53 +348,105 @@ export default function InvoiceDetailPage({
 
         {/* Ledger & Totals */}
         <div className="space-y-6">
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle>Financial Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span>Taxable Subtotal:</span>
-                <span className="font-semibold">₹{parseFloat(invoice.subtotal).toFixed(2)}</span>
-              </div>
-              {parseFloat(invoice.cgstTotal) > 0 && (
-                <>
+          {(() => {
+            const goldExchangePayments = invoice.payments?.filter((p) => p.method === "gold_exchange") || [];
+            const hasGoldExchange = goldExchangePayments.length > 0;
+            const grossInvoiceValue = parseFloat(invoice.subtotal) + parseFloat(invoice.cgstTotal) + parseFloat(invoice.sgstTotal) + parseFloat(invoice.igstTotal);
+
+            return (
+              <Card className="shadow-md">
+                <CardHeader>
+                  <CardTitle>Financial Summary</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
                   <div className="flex justify-between">
-                    <span>CGST (1.5%):</span>
-                    <span className="font-semibold">₹{parseFloat(invoice.cgstTotal).toFixed(2)}</span>
+                    <span>Taxable Subtotal:</span>
+                    <span className="font-semibold">₹{parseFloat(invoice.subtotal).toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>SGST (1.5%):</span>
-                    <span className="font-semibold">₹{parseFloat(invoice.sgstTotal).toFixed(2)}</span>
+                  {parseFloat(invoice.cgstTotal) > 0 && (
+                    <>
+                      <div className="flex justify-between">
+                        <span>CGST (1.5%):</span>
+                        <span className="font-semibold">₹{parseFloat(invoice.cgstTotal).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>SGST (1.5%):</span>
+                        <span className="font-semibold">₹{parseFloat(invoice.sgstTotal).toFixed(2)}</span>
+                      </div>
+                    </>
+                  )}
+                  {parseFloat(invoice.igstTotal) > 0 && (
+                    <div className="flex justify-between">
+                      <span>IGST (3.0%):</span>
+                      <span className="font-semibold">₹{parseFloat(invoice.igstTotal).toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {hasGoldExchange && (
+                    <>
+                      <div className="flex justify-between border-t pt-2">
+                        <span>Total Invoice Value:</span>
+                        <span className="font-semibold">₹{grossInvoiceValue.toFixed(2)}</span>
+                      </div>
+                      {goldExchangePayments.map((p) => (
+                        <div key={p.id} className="flex justify-between text-sm text-emerald-600 font-medium">
+                          <span>Old Gold Exchange ({p.exchangeMetalWeight ? parseFloat(p.exchangeMetalWeight).toFixed(3) : "0.000"}g):</span>
+                          <span>-₹{parseFloat(p.exchangeMetalValue || p.amount).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  <div className="flex justify-between border-t pt-2">
+                    <span>Round Off:</span>
+                    <span className="font-semibold">₹{parseFloat(invoice.roundOff).toFixed(2)}</span>
                   </div>
-                </>
-              )}
-              {parseFloat(invoice.igstTotal) > 0 && (
-                <div className="flex justify-between">
-                  <span>IGST (3.0%):</span>
-                  <span className="font-semibold">₹{parseFloat(invoice.igstTotal).toFixed(2)}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span>Round Off:</span>
-                <span className="font-semibold">₹{parseFloat(invoice.roundOff).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between border-t pt-2 text-base font-bold text-slate-900 dark:text-white">
-                <span>Grand Total:</span>
-                <span>₹{parseFloat(invoice.grandTotal).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between border-t pt-2 text-sm font-semibold text-emerald-600">
-                <span>Amount Paid:</span>
-                <span>₹{parseFloat(invoice.amountPaid).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-sm font-semibold text-rose-600">
-                <span>Balance Due:</span>
-                <span>₹{parseFloat(invoice.balanceDue).toFixed(2)}</span>
-              </div>
-            </CardContent>
-          </Card>
+                  <div className="flex justify-between border-t pt-2 text-base font-bold text-slate-900 dark:text-white">
+                    <span>{hasGoldExchange ? "Net Payable:" : "Grand Total:"}</span>
+                    <span>₹{parseFloat(invoice.grandTotal).toFixed(2)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between border-t pt-2 text-sm font-semibold text-emerald-600">
+                    <span>Amount Paid:</span>
+                    <span>₹{parseFloat(invoice.amountPaid).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-semibold text-rose-600">
+                    <span>Balance Due:</span>
+                    <span>₹{parseFloat(invoice.balanceDue).toFixed(2)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
         </div>
       </div>
+
+      {invoice && (
+        <InvoicePreviewDialog
+          invoice={{
+            ...invoice,
+            lineItems: invoice.lineItems?.map((l) => ({
+              ...l,
+              makingCharge: l.makingCharge,
+              stoneCharge: l.stoneCharge,
+            })),
+          }}
+          customer={invoice.customer}
+          tenantName={settings?.name || "Jewellery Showroom"}
+          tenantGstin={settings?.gstin}
+          tenantAddress={
+            settings?.addressJson
+              ? typeof settings.addressJson === "string"
+                ? settings.addressJson
+                : (settings.addressJson as { street?: string }).street || null
+              : null
+          }
+          tenantPhone={settings?.contactPhone}
+          defaultTemplate={invoice.templateId || settings?.defaultTemplateId}
+          open={isPreviewOpen}
+          onOpenChange={setIsPreviewOpen}
+        />
+      )}
     </div>
   );
 }

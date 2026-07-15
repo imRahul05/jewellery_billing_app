@@ -22,6 +22,7 @@ export async function GET(
         include: {
           lineItems: true,
           customer: true,
+          payments: true,
         },
       });
 
@@ -57,6 +58,7 @@ export async function GET(
       // Fallback/Graceful Degradation (D4): Stream PDF binary directly in HTTP response
       const tenant = await prisma.tenant.findUnique({
         where: { id: session.tenantId },
+        include: { settings: true },
       });
 
       if (!tenant) {
@@ -74,7 +76,8 @@ export async function GET(
           }
         : null;
 
-      const pdfBuffer = await renderInvoicePdfToBuffer(serialized, customerDetail, tenant);
+      const templateId = invoice.templateId || tenant.settings?.defaultTemplateId;
+      const pdfBuffer = await renderInvoicePdfToBuffer(serialized, customerDetail, tenant, templateId);
 
       const safeFilename = `${invoice.invoiceNumber.replace(/\//g, "_")}.pdf`;
 

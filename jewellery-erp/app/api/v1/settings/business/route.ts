@@ -46,11 +46,49 @@ export interface UnifiedBusinessSettings {
   defaultTemplateId: string | null;
 }
 
+const getShortTemplateKey = (id: string | null): string => {
+  if (!id) return "classic";
+  const parts = id.split("_");
+  return parts[parts.length - 1] || "classic";
+};
+
+const getFullTemplateId = (shortId: string | null | undefined, tenantId: string): string | null => {
+  if (!shortId) return null;
+  return `${tenantId}_${shortId}`;
+};
+
+async function ensureInvoiceTemplatesExist(tenantId: string): Promise<void> {
+  const templates = [
+    { id: "classic", name: "Classic Traditional" },
+    { id: "modern", name: "Modern Slate" },
+    { id: "minimal", name: "Minimalist Elegant" },
+    { id: "compact", name: "Compact Ticket" },
+    { id: "elegant", name: "Elegant Navy & Gold" },
+  ];
+
+  for (const t of templates) {
+    const fullId = `${tenantId}_${t.id}`;
+    await prisma.invoiceTemplate.upsert({
+      where: { tenantId_name: { tenantId, name: t.name } },
+      create: {
+        id: fullId,
+        tenantId,
+        name: t.name,
+        isDefault: t.id === "classic",
+      },
+      update: {},
+    });
+  }
+}
+
 export async function GET(): Promise<NextResponse> {
   try {
     const session = await authorize("settings:read");
     
     return await runWithTenant(session, async () => {
+      // Ensure default templates exist for the tenant
+      await ensureInvoiceTemplatesExist(session.tenantId);
+
       const tenant = await prisma.tenant.findUnique({
         where: { id: session.tenantId },
         include: { settings: true },
@@ -94,7 +132,7 @@ export async function GET(): Promise<NextResponse> {
         invoicePrefix: settings.invoicePrefix,
         invoiceNextSeq: settings.invoiceNextSeq.toString(),
         financialYearStartMonth: settings.financialYearStartMonth,
-        defaultTemplateId: settings.defaultTemplateId,
+        defaultTemplateId: getShortTemplateKey(settings.defaultTemplateId),
       };
 
       return NextResponse.json({ data: responseData });
@@ -114,6 +152,9 @@ export async function PATCH(request: Request): Promise<NextResponse> {
     const updateInput = BusinessSettingUpdateSchema.parse(jsonBody);
 
     return await runWithTenant(session, async () => {
+      // Ensure templates exist before reference is set
+      await ensureInvoiceTemplatesExist(session.tenantId);
+
       const result = await prisma.$transaction(async (tx) => {
         const updatedTenant = await tx.tenant.update({
           where: { id: session.tenantId },
@@ -141,7 +182,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
             invoicePrefix: updateInput.invoicePrefix ?? "INV",
             invoiceNextSeq: updateInput.invoiceNextSeq ?? BigInt(1),
             financialYearStartMonth: updateInput.financialYearStartMonth ?? 4,
-            defaultTemplateId: updateInput.defaultTemplateId,
+            defaultTemplateId: getFullTemplateId(updateInput.defaultTemplateId, session.tenantId),
           },
           update: {
             baseCurrency: updateInput.baseCurrency,
@@ -152,7 +193,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
             invoicePrefix: updateInput.invoicePrefix,
             invoiceNextSeq: updateInput.invoiceNextSeq,
             financialYearStartMonth: updateInput.financialYearStartMonth,
-            defaultTemplateId: updateInput.defaultTemplateId,
+            defaultTemplateId: getFullTemplateId(updateInput.defaultTemplateId, session.tenantId),
           },
         });
 
@@ -179,7 +220,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
         invoicePrefix: result.settings.invoicePrefix,
         invoiceNextSeq: result.settings.invoiceNextSeq.toString(),
         financialYearStartMonth: result.settings.financialYearStartMonth,
-        defaultTemplateId: result.settings.defaultTemplateId,
+        defaultTemplateId: getShortTemplateKey(result.settings.defaultTemplateId),
       };
 
       return NextResponse.json({ data: responseData });

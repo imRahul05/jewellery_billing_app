@@ -33,6 +33,7 @@ const BusinessSettingsSchema = z.object({
   invoicePrefix: z.string().min(1, "Invoice prefix is required"),
   invoiceNextSeq: z.coerce.string().min(1, "Next sequence is required"),
   financialYearStartMonth: z.coerce.number().int().min(1).max(12),
+  defaultTemplateId: z.string().nullable().optional(),
 });
 
 type BusinessSettingsFormValues = z.infer<typeof BusinessSettingsSchema>;
@@ -61,6 +62,8 @@ export default function BusinessSettingsPage() {
     register,
     handleSubmit,
     reset,
+    setValue,
+    control,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(BusinessSettingsSchema),
@@ -83,6 +86,7 @@ export default function BusinessSettingsPage() {
         invoicePrefix: settings.invoicePrefix,
         invoiceNextSeq: settings.invoiceNextSeq,
         financialYearStartMonth: settings.financialYearStartMonth,
+        defaultTemplateId: settings.defaultTemplateId || "classic",
       });
     }
   }, [settings, reset]);
@@ -104,6 +108,7 @@ export default function BusinessSettingsPage() {
 
   // useWatch is React Compiler-compatible; watch() from useForm() is not.
   const selectedMetalType = useWatch({ control: rateControl, name: "metalType" });
+  const selectedTemplate = useWatch({ control, name: "defaultTemplateId" }) || "classic";
 
   const onSettingsSubmit = (values: BusinessSettingsFormValues) => {
     updateSettings(
@@ -113,6 +118,7 @@ export default function BusinessSettingsPage() {
         pan: values.pan || null,
         contactEmail: values.contactEmail || null,
         contactPhone: values.contactPhone || null,
+        defaultTemplateId: values.defaultTemplateId || "classic",
       },
       {
         onSuccess: () => {
@@ -292,6 +298,79 @@ export default function BusinessSettingsPage() {
                       <Input id="defaultMakingCharge" type="number" step="0.0001" {...register("defaultMakingCharge")} />
                       {errors.defaultMakingCharge && <p className="text-xs text-destructive">{errors.defaultMakingCharge.message}</p>}
                     </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Invoice Layout Templates Card */}
+              <Card className="shadow-sm border md:col-span-2">
+                <CardHeader>
+                  <CardTitle>Invoice Template Layout</CardTitle>
+                  <CardDescription>Choose the default layout format for your generated bills and PDFs.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                    {[
+                      { id: "classic", name: "Classic Traditional", desc: "Standard GST template with clear borders and dark table headers." },
+                      { id: "modern", name: "Modern Slate", desc: "Contemporary look featuring a bold indigo banner and alternating rows." },
+                      { id: "minimal", name: "Minimalist", desc: "Clean luxury aesthetic utilizing white space and thin line dividers." },
+                      { id: "compact", name: "Compact", desc: "Density-optimized spacing designed for high-density receipts." },
+                      { id: "elegant", name: "Elegant Navy & Gold", desc: "Luxurious classic look featuring navy headers and golden accents." },
+                    ].map((t) => {
+                      const isSelected = selectedTemplate === t.id;
+                      return (
+                        <div
+                          key={t.id}
+                          onClick={() => setValue("defaultTemplateId", t.id)}
+                          className={`cursor-pointer rounded-xl border p-4 transition-all duration-200 relative overflow-hidden flex flex-col justify-between h-[235px] ${
+                            isSelected
+                              ? "border-primary ring-2 ring-primary/20 bg-primary/[0.02]"
+                              : "hover:border-slate-300 dark:hover:border-slate-700 bg-card"
+                          }`}
+                        >
+                          <div>
+                            {/* Miniature Layout Preview Visual */}
+                            <div className="aspect-[4/3] rounded-lg border bg-slate-50 dark:bg-slate-900/40 p-2 mb-3 flex flex-col justify-between overflow-hidden shadow-inner">
+                              {/* Header bar representation */}
+                              <div className="space-y-0.5">
+                                {t.id === "modern" && <div className="h-1 bg-indigo-600 w-full rounded-sm mb-0.5" />}
+                                <div className="flex justify-between items-center">
+                                  <div className={`h-2.5 w-1/3 rounded-sm ${t.id === "elegant" ? "bg-amber-600" : "bg-slate-400"}`} />
+                                  <div className="h-2 w-1/4 bg-slate-300 rounded-sm" />
+                                </div>
+                                <div className="h-1.5 w-1/2 bg-slate-200 rounded-sm" />
+                              </div>
+
+                              {/* Table representation */}
+                              <div className="space-y-0.5 my-1.5">
+                                <div className={`h-2 w-full rounded-sm ${t.id === "minimal" ? "bg-zinc-200" : t.id === "elegant" ? "bg-blue-900" : t.id === "compact" ? "bg-slate-700" : "bg-slate-800"}`} />
+                                <div className="h-1.5 w-full bg-slate-200 rounded-sm" />
+                                {t.id !== "minimal" && <div className="h-1.5 w-full bg-slate-100 rounded-sm" />}
+                              </div>
+
+                              {/* Total representation */}
+                              <div className="flex justify-end">
+                                <div className="space-y-0.5 w-1/2">
+                                  <div className="h-1.5 w-full bg-slate-200 rounded-sm" />
+                                  <div className={`h-2 w-full rounded-sm ${t.id === "elegant" ? "bg-amber-500" : "bg-slate-400"}`} />
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <h3 className="font-semibold text-xs mb-1">{t.name}</h3>
+                            <p className="text-[10px] text-muted-foreground leading-snug">{t.desc}</p>
+                          </div>
+
+                          {isSelected && (
+                            <div className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full p-0.5 shadow-sm">
+                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>

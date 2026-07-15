@@ -110,3 +110,18 @@ export function useProcessReturn(tenantId: string) {
   });
 }
 
+export function useDeleteInvoice(tenantId: string) {
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await invoiceApi.deleteInvoice(id);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.invoices.all(tenantId) });
+      router.refresh();
+    },
+  });
+}
+

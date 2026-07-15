@@ -10,14 +10,18 @@ import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { useCustomers } from "@/lib/query/hooks/use-customers";
+import { useCustomers, useCreateCustomer } from "@/lib/query/hooks/use-customers";
 import { useInventoryItems } from "@/lib/query/hooks/use-inventory-items";
 import { useMetalRates } from "@/lib/query/hooks/use-metal-rates";
 import { useCreateInvoice, useFinalizeInvoice } from "@/lib/query/hooks/use-invoices";
+import { useBusinessSettings } from "@/lib/query/hooks/use-business-settings";
 import { useTenantStore } from "@/lib/stores/tenant-store";
 import { InvoiceCreateInput, LineItemInput, OldGoldExchangeInput } from "@/lib/api/invoices.api";
+import { calculateInvoice } from "@/lib/billing/calculator";
+import { InvoicePreviewDialog } from "@/components/billing/invoice-preview-dialog";
+import { Prisma } from "@prisma/client";
 
-import { ChevronRight, ChevronLeft, Plus, Trash2, Calculator, ShoppingBag } from "lucide-react";
+import { ChevronRight, ChevronLeft, Plus, Trash2, Calculator, ShoppingBag, Eye } from "lucide-react";
 
 export default function InvoiceBuilderPage(): React.JSX.Element {
   const router = useRouter();
@@ -31,15 +35,51 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
   // React Query Hooks
   const { data: customers = [] } = useCustomers(tId);
   const { data: inventoryItems = [] } = useInventoryItems(tId, { status: "in_stock" });
+  const { data: settings } = useBusinessSettings(tId);
 
   const todayStr = React.useMemo(() => new Date().toISOString().split("T")[0], []);
   const { data: ratesData = [] } = useMetalRates(tId, { rateDate: todayStr });
 
   const { mutateAsync: createInvoice } = useCreateInvoice(tId);
   const { mutateAsync: finalizeInvoice } = useFinalizeInvoice(tId);
+  const { mutateAsync: createCustomer } = useCreateCustomer(tId);
+
+  // Preview dialog state
+  const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
 
   // Step 1 Form Data
   const [customerId, setCustomerId] = useState<string>("");
+  const [customerMode, setCustomerMode] = useState<"walk_in" | "existing" | "new">("walk_in");
+  const [custSearch, setCustSearch] = useState<string>("");
+  const [custDropdownOpen, setCustDropdownOpen] = useState<boolean>(false);
+  const [newCustName, setNewCustName] = useState<string>("");
+  const [newCustPhone, setNewCustPhone] = useState<string>("");
+  const [newCustEmail, setNewCustEmail] = useState<string>("");
+  const [newCustGstin, setNewCustGstin] = useState<string>("");
+  const [newCustAddress, setNewCustAddress] = useState<string>("");
+
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // Click outside listener for searchable select dropdown
+  React.useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setCustDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredCustomers = React.useMemo(() => {
+    if (!custSearch) return customers;
+    const query = custSearch.toLowerCase();
+    return customers.filter(c => 
+      c.name.toLowerCase().includes(query) || 
+      (c.phone && c.phone.toLowerCase().includes(query))
+    );
+  }, [customers, custSearch]);
+
   const [invoiceDate, setInvoiceDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [dueDate] = useState<string>("");
   const [invoiceType, setInvoiceType] = useState<string>("sales");
@@ -79,8 +119,6 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
 
   const [invoiceDiscountType, setInvoiceDiscountType] = useState<"AMOUNT" | "PERCENT" | "NONE">("NONE");
   const [invoiceDiscountValue, setInvoiceDiscountValue] = useState<string>("0");
-
-
 
   // Sync Item Select with details
   const handleItemSelect = (itemId: string): void => {
@@ -161,8 +199,34 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
       return;
     }
 
+    if (customerMode === "existing" && !customerId) {
+      toast.error("Please select an existing customer.");
+      return;
+    }
+
+    if (customerMode === "new" && !newCustName.trim()) {
+      toast.error("Please enter a customer name for the new customer.");
+      return;
+    }
+
     try {
       setSubmitting(true);
+
+      let resolvedCustomerId: string | null = null;
+      if (customerMode === "existing") {
+        resolvedCustomerId = customerId;
+      } else if (customerMode === "new") {
+        toast.info("Registering new customer...");
+        const newCust = await createCustomer({
+          name: newCustName,
+          phone: newCustPhone || undefined,
+          email: newCustEmail || undefined,
+          gstin: newCustGstin || undefined,
+          addressJson: newCustAddress ? { street: newCustAddress } : undefined,
+        });
+        resolvedCustomerId = newCust.id;
+      }
+
       const oldGold: OldGoldExchangeInput | null = includeOldGold && oldGoldWeight && oldGoldPurityRate
         ? {
             netWeight: parseFloat(oldGoldWeight),
@@ -172,7 +236,7 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
         : null;
 
       const payload: InvoiceCreateInput = {
-        customerId: customerId || null,
+        customerId: resolvedCustomerId,
         invoiceDate: new Date(invoiceDate),
         dueDate: dueDate ? new Date(dueDate) : null,
         type: invoiceType as "sales" | "purchase" | "quotation" | "estimate" | "return" | "exchange" | "repair",
@@ -203,6 +267,188 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
     }
   };
 
+  const computedPreviewInvoice = React.useMemo(() => {
+    if (lines.length === 0 || !isPreviewOpen) return null;
+
+    // Resolve sellerStateCode
+    const sellerStateCode = settings?.gstin ? settings.gstin.substring(0, 2) : "27";
+
+    const linesForCalc = lines.map(line => ({
+      productId: line.productId,
+      inventoryItemId: line.inventoryItemId,
+      hsnCodeId: line.hsnCodeId,
+      description: line.description,
+      materialType: line.materialType,
+      karat: line.karat,
+      quantity: line.quantity ?? 1,
+      grossWeight: Number(line.grossWeight),
+      stoneWeight: Number(line.stoneWeight),
+      purity: Number(line.purity),
+      metalRatePerGram: Number(line.metalRatePerGram),
+      makingChargeType: line.makingChargeType,
+      makingChargeValue: Number(line.makingChargeValue),
+      wastageType: line.wastageType,
+      wastageValue: Number(line.wastageValue),
+      stoneChargeType: line.stoneChargeType,
+      stoneCarat: Number(line.stoneCarat ?? 0),
+      stonePieces: Number(line.stonePieces ?? 0),
+      stoneRate: Number(line.stoneRate ?? 0),
+      hallmarkCharges: Number(line.hallmarkCharges ?? 0),
+      otherCharges: Number(line.otherCharges ?? 0),
+      lineDiscountType: line.lineDiscountType,
+      lineDiscountValue: Number(line.lineDiscountValue ?? 0),
+      gstRatePercent: Number(line.gstRatePercent ?? settings?.defaultGstRate ?? 3.0),
+      sellerStateCode,
+      placeOfSupplyStateCode: placeOfSupply,
+    }));
+
+    // Calculate old gold value
+    let oldGoldVal = 0;
+    if (includeOldGold && oldGoldWeight && oldGoldPurityRate) {
+      const netWeight = parseFloat(oldGoldWeight);
+      const purityRate = parseFloat(oldGoldPurityRate);
+      const deductionPercent = parseFloat(oldGoldDeduction || "0");
+      const multiplier = 1 - deductionPercent / 100;
+      oldGoldVal = netWeight * purityRate * multiplier;
+    }
+
+    try {
+      const calcResult = calculateInvoice(
+        linesForCalc,
+        invoiceDiscountType,
+        parseFloat(invoiceDiscountValue || "0"),
+        oldGoldVal
+      );
+
+      const previewLines = calcResult.lines.map((l, idx) => {
+        const originalLine = lines[idx];
+        return {
+          description: originalLine.description,
+          karat: originalLine.karat,
+          purityFineness: originalLine.purity.toString(),
+          grossWeight: originalLine.grossWeight.toString(),
+          netWeight: l.netWeight.toString(),
+          ratePerGram: originalLine.metalRatePerGram.toString(),
+          makingCharge: l.makingCharges.toString(),
+          stoneCharge: l.stoneCharges.toString(),
+          discount: l.lineDiscount.toString(),
+          taxableValue: l.taxableValue.toString(),
+          cgstAmount: l.cgst.toString(),
+          sgstAmount: l.sgst.toString(),
+          igstAmount: l.igst.toString(),
+          lineTotal: l.lineTotal.toString(),
+        };
+      });
+
+      const resolvedCustomerName = customerMode === "existing"
+        ? (customers.find(c => c.id === customerId)?.name || "Existing Customer")
+        : customerMode === "new"
+        ? newCustName
+        : "Walk-in Customer";
+
+      const resolvedCustomerPhone = customerMode === "existing"
+        ? (customers.find(c => c.id === customerId)?.phone || null)
+        : customerMode === "new"
+        ? newCustPhone
+        : null;
+
+      const resolvedCustomerEmail = customerMode === "existing"
+        ? (customers.find(c => c.id === customerId)?.email || null)
+        : customerMode === "new"
+        ? newCustEmail
+        : null;
+
+      const resolvedCustomerGstin = customerMode === "existing"
+        ? (customers.find(c => c.id === customerId)?.gstin || null)
+        : customerMode === "new"
+        ? newCustGstin
+        : null;
+
+      const resolvedCustomerAddress = customerMode === "existing"
+        ? (customers.find(c => c.id === customerId)?.addressJson || null)
+        : customerMode === "new"
+        ? (newCustAddress ? { street: newCustAddress } : null)
+        : null;
+
+      const customerDetails = resolvedCustomerName !== "Walk-in Customer" ? {
+        name: resolvedCustomerName,
+        phone: resolvedCustomerPhone,
+        email: resolvedCustomerEmail,
+        gstin: resolvedCustomerGstin,
+        addressJson: resolvedCustomerAddress as PreviewCustomer["addressJson"],
+      } : null;
+
+      return {
+        invoice: {
+          invoiceNumber: "DRAFT-PREVIEW",
+          invoiceDate: invoiceDate,
+          type: invoiceType,
+          status: "draft",
+          placeOfSupply: placeOfSupply,
+          subtotal: calcResult.subTotalTaxable.toString(),
+          makingChargesTotal: calcResult.lines.reduce((sum, l) => sum.add(l.makingCharges), new Prisma.Decimal(0)).toString(),
+          discountTotal: calcResult.lines.reduce((sum, l) => sum.add(l.lineDiscount), new Prisma.Decimal(0)).toString(),
+          cgstTotal: calcResult.totalCgst.toString(),
+          sgstTotal: calcResult.totalSgst.toString(),
+          igstTotal: calcResult.totalIgst.toString(),
+          roundOff: calcResult.roundOff.toString(),
+          grandTotal: calcResult.grandTotal.toString(),
+          amountPaid: "0",
+          balanceDue: calcResult.grandTotal.toString(),
+          notes: notes,
+          lineItems: previewLines,
+          payments: includeOldGold && oldGoldWeight && oldGoldPurityRate ? [
+            {
+              method: "gold_exchange",
+              amount: oldGoldVal.toString(),
+              exchangeMetalWeight: oldGoldWeight,
+              exchangeMetalValue: oldGoldVal.toString(),
+            }
+          ] : [],
+        },
+        customer: customerDetails,
+      };
+    } catch (e) {
+      console.error("Error calculating preview invoice", e);
+      return null;
+    }
+  }, [
+    lines,
+    isPreviewOpen,
+    settings,
+    placeOfSupply,
+    includeOldGold,
+    oldGoldWeight,
+    oldGoldPurityRate,
+    oldGoldDeduction,
+    invoiceDiscountType,
+    invoiceDiscountValue,
+    customerMode,
+    customerId,
+    customers,
+    newCustName,
+    newCustPhone,
+    newCustEmail,
+    newCustGstin,
+    newCustAddress,
+    invoiceDate,
+    invoiceType,
+    notes,
+  ]);
+
+  interface PreviewCustomer {
+    name: string;
+    phone?: string | null;
+    email?: string | null;
+    gstin?: string | null;
+    addressJson?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      postalCode?: string;
+    } | string | null;
+  }
+
   return (
     <div className="container mx-auto p-6 max-w-5xl space-y-6">
       {/* Wizard Header */}
@@ -223,6 +469,9 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
             </Button>
           ) : (
             <div className="space-x-2">
+              <Button variant="outline" onClick={() => setIsPreviewOpen(true)} disabled={lines.length === 0 || submitting}>
+                <Eye className="mr-2 h-4 w-4" /> Preview Bill
+              </Button>
               <Button variant="outline" onClick={() => void handleSaveInvoice(false)} disabled={submitting}>
                 Save Draft
               </Button>
@@ -241,18 +490,173 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
             <CardTitle>Customer & Billing Settings</CardTitle>
             <CardDescription>Select customer and tax settings.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="customer">Customer</Label>
-                <Select id="customer" value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-                  <option value="">Walk-in Customer</option>
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ""}</option>
-                  ))}
-                </Select>
+          <CardContent className="space-y-6">
+            {/* Customer Selector Mode Tabs */}
+            <div className="space-y-2">
+              <Label>Customer Selection Mode</Label>
+              <div className="grid grid-cols-3 gap-2 p-1 bg-muted rounded-lg max-w-md">
+                <button
+                  type="button"
+                  className={`py-1.5 text-xs font-semibold rounded-md transition-all ${
+                    customerMode === "walk_in"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => {
+                    setCustomerMode("walk_in");
+                    setCustomerId("");
+                  }}
+                >
+                  Walk-in Customer
+                </button>
+                <button
+                  type="button"
+                  className={`py-1.5 text-xs font-semibold rounded-md transition-all ${
+                    customerMode === "existing"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => {
+                    setCustomerMode("existing");
+                    setCustomerId("");
+                    setCustSearch("");
+                  }}
+                >
+                  Existing Customer
+                </button>
+                <button
+                  type="button"
+                  className={`py-1.5 text-xs font-semibold rounded-md transition-all ${
+                    customerMode === "new"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => {
+                    setCustomerMode("new");
+                    setCustomerId("");
+                  }}
+                >
+                  New Customer
+                </button>
               </div>
+            </div>
 
+            {/* Conditional Customer Inputs */}
+            {customerMode === "walk_in" && (
+              <div className="p-4 border border-dashed rounded-lg bg-muted/20 text-xs text-muted-foreground">
+                Selected: <strong className="text-foreground">Walk-in Customer</strong>. No customer profile will be created or linked.
+              </div>
+            )}
+
+            {customerMode === "existing" && (
+              <div className="space-y-2 relative" ref={dropdownRef}>
+                <Label htmlFor="cust-search">Search Existing Customer</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="cust-search"
+                    placeholder="Search by Name or Mobile Number..."
+                    value={custSearch}
+                    onChange={(e) => {
+                      setCustSearch(e.target.value);
+                      setCustDropdownOpen(true);
+                    }}
+                    onFocus={() => setCustDropdownOpen(true)}
+                  />
+                  {customerId && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setCustomerId("");
+                        setCustSearch("");
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+                {custDropdownOpen && (
+                  <div className="absolute z-10 w-full mt-1 bg-popover text-popover-foreground border rounded-md shadow-md max-h-60 overflow-y-auto">
+                    {filteredCustomers.length === 0 ? (
+                      <div className="p-3 text-sm text-muted-foreground text-center">No customers match your search.</div>
+                    ) : (
+                      filteredCustomers.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground border-b last:border-b-0 transition-colors"
+                          onClick={() => {
+                            setCustomerId(c.id);
+                            setCustSearch(`${c.name} ${c.phone ? `(${c.phone})` : ""}`);
+                            setCustDropdownOpen(false);
+                          }}
+                        >
+                          <div className="font-semibold">{c.name}</div>
+                          {c.phone && <div className="text-xs text-muted-foreground">Mobile: {c.phone}</div>}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {customerMode === "new" && (
+              <div className="border p-4 rounded-lg bg-muted/10 space-y-4">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">New Customer Registration</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-name">Full Name <span className="text-destructive">*</span></Label>
+                    <Input
+                      id="new-name"
+                      placeholder="e.g. Rahul Sharma"
+                      value={newCustName}
+                      onChange={(e) => setNewCustName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-phone">Phone Number</Label>
+                    <Input
+                      id="new-phone"
+                      placeholder="e.g. 9876543210"
+                      value={newCustPhone}
+                      onChange={(e) => setNewCustPhone(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-email">Email Address</Label>
+                    <Input
+                      id="new-email"
+                      type="email"
+                      placeholder="e.g. rahul@example.com"
+                      value={newCustEmail}
+                      onChange={(e) => setNewCustEmail(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-gstin">GSTIN (For B2B)</Label>
+                    <Input
+                      id="new-gstin"
+                      placeholder="e.g. 27AAAAA1111A1Z1 (Required for B2B)"
+                      value={newCustGstin}
+                      onChange={(e) => setNewCustGstin(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="new-address">Postal Address</Label>
+                  <Input
+                    id="new-address"
+                    placeholder="e.g. Flat 101, Park Avenue, Mumbai"
+                    value={newCustAddress}
+                    onChange={(e) => setNewCustAddress(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Other Billing Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-muted">
               <div className="space-y-2">
                 <Label htmlFor="supply">Place of Supply (GST State Code)</Label>
                 <Input
@@ -585,6 +989,26 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
             </Card>
           </div>
         </div>
+      )}
+
+      {computedPreviewInvoice && (
+        <InvoicePreviewDialog
+          invoice={computedPreviewInvoice.invoice}
+          customer={computedPreviewInvoice.customer}
+          tenantName={settings?.name || "Jewellery Showroom"}
+          tenantGstin={settings?.gstin}
+          tenantAddress={
+            settings?.addressJson
+              ? typeof settings.addressJson === "string"
+                ? settings.addressJson
+                : (settings.addressJson as { street?: string }).street || null
+              : null
+          }
+          tenantPhone={settings?.contactPhone}
+          defaultTemplate={settings?.defaultTemplateId}
+          open={isPreviewOpen}
+          onOpenChange={setIsPreviewOpen}
+        />
       )}
     </div>
   );
