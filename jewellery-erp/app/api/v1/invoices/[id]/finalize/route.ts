@@ -22,6 +22,7 @@ export async function POST(
         include: {
           lineItems: true,
           payments: true,
+          customer: true,
         },
       });
 
@@ -193,6 +194,7 @@ export async function POST(
           include: {
             lineItems: true,
             payments: true,
+            customer: true,
           },
         });
 
@@ -217,6 +219,38 @@ export async function POST(
       for (const line of invoice.lineItems) {
         if (line.productId) {
           await checkAndTriggerLowStock(session.tenantId, line.productId);
+        }
+      }
+
+      // Try sending the email to the business contact email (non-blocking / handled gracefully)
+      if (tenant.contactEmail) {
+        try {
+          const serialized = serializeInvoice(finalizedInvoice);
+          const customerDetail = finalizedInvoice.customer
+            ? {
+                name: finalizedInvoice.customer.name,
+                phone: finalizedInvoice.customer.phone,
+                email: finalizedInvoice.customer.email,
+                gstin: finalizedInvoice.customer.gstin,
+                addressJson: finalizedInvoice.customer.addressJson,
+              }
+            : null;
+          const templateId = finalizedInvoice.templateId || tenant.settings?.defaultTemplateId;
+          
+          // Render PDF in memory
+          const { renderInvoicePdfToBuffer } = await import("@/lib/billing/pdf/renderer");
+          const pdfBuffer = await renderInvoicePdfToBuffer(serialized, customerDetail, tenant, templateId);
+          
+          // Send email via Resend
+          const { sendInvoiceEmail } = await import("@/lib/mail/send-invoice");
+          await sendInvoiceEmail({
+            recipientEmail: tenant.contactEmail,
+            invoice: serialized,
+            pdfBuffer,
+            businessName: tenant.name,
+          });
+        } catch (emailErr) {
+          console.error("Failed to generate/send invoice email:", emailErr);
         }
       }
 

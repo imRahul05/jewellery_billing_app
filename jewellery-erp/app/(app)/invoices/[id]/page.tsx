@@ -15,7 +15,7 @@ import { useBusinessSettings } from "@/lib/query/hooks/use-business-settings";
 import { useTenantStore } from "@/lib/stores/tenant-store";
 import { invoiceApi, ReturnInvoiceInput } from "@/lib/api/invoices.api";
 import { InvoicePreviewDialog } from "@/components/billing/invoice-preview-dialog";
-import { FileText, ArrowLeft, CreditCard, Ban, Undo2, CheckCircle, Trash2, Eye } from "lucide-react";
+import { FileText, ArrowLeft, CreditCard, Ban, Undo2, CheckCircle, Trash2, Eye, Loader2 } from "lucide-react";
 
 export default function InvoiceDetailPage({
   params,
@@ -57,6 +57,8 @@ export default function InvoiceDetailPage({
     try {
       await finalizeInvoice(id);
       toast.success("Invoice finalized and sequence number assigned!");
+      // Automatically open PDF in a new tab
+      window.open(`/api/v1/invoices/${id}/pdf?stream=true`, "_blank");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to finalize invoice";
       toast.error(msg);
@@ -446,6 +448,20 @@ export default function InvoiceDetailPage({
           open={isPreviewOpen}
           onOpenChange={setIsPreviewOpen}
         />
+      )}
+
+      {finalizing && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md text-white animate-in fade-in duration-200">
+          <div className="flex flex-col items-center space-y-4 p-6 rounded-lg bg-slate-900/90 border border-slate-800 shadow-2xl">
+            <Loader2 className="h-10 w-10 animate-spin text-emerald-400" />
+            <div className="text-center space-y-2">
+              <h3 className="font-semibold text-lg text-white">Finalizing Invoice</h3>
+              <p className="text-sm text-slate-400 max-w-xs">
+                Reconciling stock, securing invoice sequence number, and dispatching a copy to the owner...
+              </p>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
