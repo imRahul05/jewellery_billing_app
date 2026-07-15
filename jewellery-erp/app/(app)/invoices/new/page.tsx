@@ -21,7 +21,7 @@ import { calculateInvoice } from "@/lib/billing/calculator";
 import { InvoicePreviewDialog } from "@/components/billing/invoice-preview-dialog";
 import { Prisma } from "@prisma/client";
 
-import { ChevronRight, ChevronLeft, Plus, Trash2, Calculator, ShoppingBag, Eye } from "lucide-react";
+import { ChevronRight, ChevronLeft, Plus, Trash2, Calculator, ShoppingBag, Eye, Loader2 } from "lucide-react";
 
 export default function InvoiceBuilderPage(): React.JSX.Element {
   const router = useRouter();
@@ -254,6 +254,8 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
         toast.info("Finalizing invoice...");
         await finalizeInvoice(createdInvoice.id);
         toast.success("Invoice finalized and stock updated!");
+        // Automatically open PDF in a new tab
+        window.open(`/api/v1/invoices/${createdInvoice.id}/pdf?stream=true`, "_blank");
       } else {
         toast.success("Invoice draft saved successfully!");
       }
@@ -1009,6 +1011,20 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
           open={isPreviewOpen}
           onOpenChange={setIsPreviewOpen}
         />
+      )}
+
+      {submitting && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md text-white animate-in fade-in duration-200">
+          <div className="flex flex-col items-center space-y-4 p-6 rounded-lg bg-slate-900/90 border border-slate-800 shadow-2xl">
+            <Loader2 className="h-10 w-10 animate-spin text-emerald-400" />
+            <div className="text-center space-y-2">
+              <h3 className="font-semibold text-lg text-white">Processing Invoice</h3>
+              <p className="text-sm text-slate-400 max-w-xs">
+                Saving customer data, allocating stock items, and finalizing bill...
+              </p>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
