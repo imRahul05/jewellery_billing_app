@@ -441,10 +441,10 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="new-gstin">GSTIN</Label>
+                    <Label htmlFor="new-gstin">GSTIN (For B2B)</Label>
                     <Input
                       id="new-gstin"
-                      placeholder="e.g. 27AAAAA1111A1Z1"
+                      placeholder="e.g. 27AAAAA1111A1Z1 (Required for B2B)"
                       value={newCustGstin}
                       onChange={(e) => setNewCustGstin(e.target.value)}
                     />
