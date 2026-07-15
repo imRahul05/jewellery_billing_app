@@ -14,10 +14,14 @@ import { useCustomers, useCreateCustomer } from "@/lib/query/hooks/use-customers
 import { useInventoryItems } from "@/lib/query/hooks/use-inventory-items";
 import { useMetalRates } from "@/lib/query/hooks/use-metal-rates";
 import { useCreateInvoice, useFinalizeInvoice } from "@/lib/query/hooks/use-invoices";
+import { useBusinessSettings } from "@/lib/query/hooks/use-business-settings";
 import { useTenantStore } from "@/lib/stores/tenant-store";
 import { InvoiceCreateInput, LineItemInput, OldGoldExchangeInput } from "@/lib/api/invoices.api";
+import { calculateInvoice } from "@/lib/billing/calculator";
+import { InvoicePreviewDialog } from "@/components/billing/invoice-preview-dialog";
+import { Prisma } from "@prisma/client";
 
-import { ChevronRight, ChevronLeft, Plus, Trash2, Calculator, ShoppingBag } from "lucide-react";
+import { ChevronRight, ChevronLeft, Plus, Trash2, Calculator, ShoppingBag, Eye } from "lucide-react";
 
 export default function InvoiceBuilderPage(): React.JSX.Element {
   const router = useRouter();
@@ -31,6 +35,7 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
   // React Query Hooks
   const { data: customers = [] } = useCustomers(tId);
   const { data: inventoryItems = [] } = useInventoryItems(tId, { status: "in_stock" });
+  const { data: settings } = useBusinessSettings(tId);
 
   const todayStr = React.useMemo(() => new Date().toISOString().split("T")[0], []);
   const { data: ratesData = [] } = useMetalRates(tId, { rateDate: todayStr });
@@ -38,6 +43,9 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
   const { mutateAsync: createInvoice } = useCreateInvoice(tId);
   const { mutateAsync: finalizeInvoice } = useFinalizeInvoice(tId);
   const { mutateAsync: createCustomer } = useCreateCustomer(tId);
+
+  // Preview dialog state
+  const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
 
   // Step 1 Form Data
   const [customerId, setCustomerId] = useState<string>("");
@@ -259,6 +267,188 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
     }
   };
 
+  const computedPreviewInvoice = React.useMemo(() => {
+    if (lines.length === 0 || !isPreviewOpen) return null;
+
+    // Resolve sellerStateCode
+    const sellerStateCode = settings?.gstin ? settings.gstin.substring(0, 2) : "27";
+
+    const linesForCalc = lines.map(line => ({
+      productId: line.productId,
+      inventoryItemId: line.inventoryItemId,
+      hsnCodeId: line.hsnCodeId,
+      description: line.description,
+      materialType: line.materialType,
+      karat: line.karat,
+      quantity: line.quantity ?? 1,
+      grossWeight: Number(line.grossWeight),
+      stoneWeight: Number(line.stoneWeight),
+      purity: Number(line.purity),
+      metalRatePerGram: Number(line.metalRatePerGram),
+      makingChargeType: line.makingChargeType,
+      makingChargeValue: Number(line.makingChargeValue),
+      wastageType: line.wastageType,
+      wastageValue: Number(line.wastageValue),
+      stoneChargeType: line.stoneChargeType,
+      stoneCarat: Number(line.stoneCarat ?? 0),
+      stonePieces: Number(line.stonePieces ?? 0),
+      stoneRate: Number(line.stoneRate ?? 0),
+      hallmarkCharges: Number(line.hallmarkCharges ?? 0),
+      otherCharges: Number(line.otherCharges ?? 0),
+      lineDiscountType: line.lineDiscountType,
+      lineDiscountValue: Number(line.lineDiscountValue ?? 0),
+      gstRatePercent: Number(line.gstRatePercent ?? settings?.defaultGstRate ?? 3.0),
+      sellerStateCode,
+      placeOfSupplyStateCode: placeOfSupply,
+    }));
+
+    // Calculate old gold value
+    let oldGoldVal = 0;
+    if (includeOldGold && oldGoldWeight && oldGoldPurityRate) {
+      const netWeight = parseFloat(oldGoldWeight);
+      const purityRate = parseFloat(oldGoldPurityRate);
+      const deductionPercent = parseFloat(oldGoldDeduction || "0");
+      const multiplier = 1 - deductionPercent / 100;
+      oldGoldVal = netWeight * purityRate * multiplier;
+    }
+
+    try {
+      const calcResult = calculateInvoice(
+        linesForCalc,
+        invoiceDiscountType,
+        parseFloat(invoiceDiscountValue || "0"),
+        oldGoldVal
+      );
+
+      const previewLines = calcResult.lines.map((l, idx) => {
+        const originalLine = lines[idx];
+        return {
+          description: originalLine.description,
+          karat: originalLine.karat,
+          purityFineness: originalLine.purity.toString(),
+          grossWeight: originalLine.grossWeight.toString(),
+          netWeight: l.netWeight.toString(),
+          ratePerGram: originalLine.metalRatePerGram.toString(),
+          makingCharge: l.makingCharges.toString(),
+          stoneCharge: l.stoneCharges.toString(),
+          discount: l.lineDiscount.toString(),
+          taxableValue: l.taxableValue.toString(),
+          cgstAmount: l.cgst.toString(),
+          sgstAmount: l.sgst.toString(),
+          igstAmount: l.igst.toString(),
+          lineTotal: l.lineTotal.toString(),
+        };
+      });
+
+      const resolvedCustomerName = customerMode === "existing"
+        ? (customers.find(c => c.id === customerId)?.name || "Existing Customer")
+        : customerMode === "new"
+        ? newCustName
+        : "Walk-in Customer";
+
+      const resolvedCustomerPhone = customerMode === "existing"
+        ? (customers.find(c => c.id === customerId)?.phone || null)
+        : customerMode === "new"
+        ? newCustPhone
+        : null;
+
+      const resolvedCustomerEmail = customerMode === "existing"
+        ? (customers.find(c => c.id === customerId)?.email || null)
+        : customerMode === "new"
+        ? newCustEmail
+        : null;
+
+      const resolvedCustomerGstin = customerMode === "existing"
+        ? (customers.find(c => c.id === customerId)?.gstin || null)
+        : customerMode === "new"
+        ? newCustGstin
+        : null;
+
+      const resolvedCustomerAddress = customerMode === "existing"
+        ? (customers.find(c => c.id === customerId)?.addressJson || null)
+        : customerMode === "new"
+        ? (newCustAddress ? { street: newCustAddress } : null)
+        : null;
+
+      const customerDetails = resolvedCustomerName !== "Walk-in Customer" ? {
+        name: resolvedCustomerName,
+        phone: resolvedCustomerPhone,
+        email: resolvedCustomerEmail,
+        gstin: resolvedCustomerGstin,
+        addressJson: resolvedCustomerAddress as PreviewCustomer["addressJson"],
+      } : null;
+
+      return {
+        invoice: {
+          invoiceNumber: "DRAFT-PREVIEW",
+          invoiceDate: invoiceDate,
+          type: invoiceType,
+          status: "draft",
+          placeOfSupply: placeOfSupply,
+          subtotal: calcResult.subTotalTaxable.toString(),
+          makingChargesTotal: calcResult.lines.reduce((sum, l) => sum.add(l.makingCharges), new Prisma.Decimal(0)).toString(),
+          discountTotal: calcResult.lines.reduce((sum, l) => sum.add(l.lineDiscount), new Prisma.Decimal(0)).toString(),
+          cgstTotal: calcResult.totalCgst.toString(),
+          sgstTotal: calcResult.totalSgst.toString(),
+          igstTotal: calcResult.totalIgst.toString(),
+          roundOff: calcResult.roundOff.toString(),
+          grandTotal: calcResult.grandTotal.toString(),
+          amountPaid: "0",
+          balanceDue: calcResult.grandTotal.toString(),
+          notes: notes,
+          lineItems: previewLines,
+          payments: includeOldGold && oldGoldWeight && oldGoldPurityRate ? [
+            {
+              method: "gold_exchange",
+              amount: oldGoldVal.toString(),
+              exchangeMetalWeight: oldGoldWeight,
+              exchangeMetalValue: oldGoldVal.toString(),
+            }
+          ] : [],
+        },
+        customer: customerDetails,
+      };
+    } catch (e) {
+      console.error("Error calculating preview invoice", e);
+      return null;
+    }
+  }, [
+    lines,
+    isPreviewOpen,
+    settings,
+    placeOfSupply,
+    includeOldGold,
+    oldGoldWeight,
+    oldGoldPurityRate,
+    oldGoldDeduction,
+    invoiceDiscountType,
+    invoiceDiscountValue,
+    customerMode,
+    customerId,
+    customers,
+    newCustName,
+    newCustPhone,
+    newCustEmail,
+    newCustGstin,
+    newCustAddress,
+    invoiceDate,
+    invoiceType,
+    notes,
+  ]);
+
+  interface PreviewCustomer {
+    name: string;
+    phone?: string | null;
+    email?: string | null;
+    gstin?: string | null;
+    addressJson?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      postalCode?: string;
+    } | string | null;
+  }
+
   return (
     <div className="container mx-auto p-6 max-w-5xl space-y-6">
       {/* Wizard Header */}
@@ -279,6 +469,9 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
             </Button>
           ) : (
             <div className="space-x-2">
+              <Button variant="outline" onClick={() => setIsPreviewOpen(true)} disabled={lines.length === 0 || submitting}>
+                <Eye className="mr-2 h-4 w-4" /> Preview Bill
+              </Button>
               <Button variant="outline" onClick={() => void handleSaveInvoice(false)} disabled={submitting}>
                 Save Draft
               </Button>
@@ -796,6 +989,26 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
             </Card>
           </div>
         </div>
+      )}
+
+      {computedPreviewInvoice && (
+        <InvoicePreviewDialog
+          invoice={computedPreviewInvoice.invoice}
+          customer={computedPreviewInvoice.customer}
+          tenantName={settings?.name || "Jewellery Showroom"}
+          tenantGstin={settings?.gstin}
+          tenantAddress={
+            settings?.addressJson
+              ? typeof settings.addressJson === "string"
+                ? settings.addressJson
+                : (settings.addressJson as { street?: string }).street || null
+              : null
+          }
+          tenantPhone={settings?.contactPhone}
+          defaultTemplate={settings?.defaultTemplateId}
+          open={isPreviewOpen}
+          onOpenChange={setIsPreviewOpen}
+        />
       )}
     </div>
   );

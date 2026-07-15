@@ -4,7 +4,7 @@ import { runWithTenant } from "@/lib/db/tenant-context";
 import { prisma } from "@/lib/db";
 import { InvoiceCreateSchema } from "@/lib/billing/validation";
 import { calculateInvoice, type LineItemInput } from "@/lib/billing/calculator";
-import { Prisma, Invoice, InvoiceLineItem, MetalType, InvoiceStatus, InvoiceType, Payment } from "@prisma/client";
+import { Prisma, Invoice, InvoiceLineItem, MetalType, InvoiceStatus, InvoiceType, Payment, Customer } from "@prisma/client";
 import { revalidateTag } from "next/cache";
 
 
@@ -50,6 +50,15 @@ export interface SerializedPayment {
   createdAt: string;
 }
 
+export interface SerializedCustomer {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  gstin: string | null;
+  addressJson: Prisma.JsonValue;
+}
+
 export interface SerializedInvoice {
   id: string;
   tenantId: string;
@@ -80,6 +89,7 @@ export interface SerializedInvoice {
   updatedAt: string;
   lineItems?: SerializedInvoiceLineItem[];
   payments?: SerializedPayment[];
+  customer?: SerializedCustomer | null;
 }
 
 export function serializePayment(p: Payment): SerializedPayment {
@@ -129,7 +139,7 @@ export function serializeInvoiceLineItem(item: InvoiceLineItem): SerializedInvoi
 }
 
 export function serializeInvoice(
-  inv: Invoice & { lineItems?: InvoiceLineItem[]; payments?: Payment[] }
+  inv: Invoice & { lineItems?: InvoiceLineItem[]; payments?: Payment[]; customer?: Customer | null }
 ): SerializedInvoice {
   return {
     id: inv.id,
@@ -161,6 +171,16 @@ export function serializeInvoice(
     updatedAt: inv.updatedAt.toISOString(),
     lineItems: inv.lineItems?.map(serializeInvoiceLineItem),
     payments: inv.payments?.map(serializePayment),
+    customer: inv.customer
+      ? {
+          id: inv.customer.id,
+          name: inv.customer.name,
+          phone: inv.customer.phone,
+          email: inv.customer.email,
+          gstin: inv.customer.gstin,
+          addressJson: inv.customer.addressJson,
+        }
+      : null,
   };
 }
 

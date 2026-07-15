@@ -47,7 +47,8 @@ async function streamToBuffer(stream: Readable): Promise<Buffer> {
 export async function renderInvoicePdfToBuffer(
   invoice: SerializedInvoice,
   customer: CustomerDetails | null,
-  tenant: Tenant
+  tenant: Tenant,
+  templateId?: string | null
 ): Promise<Buffer> {
   const element = React.createElement(InvoicePdfDocument, {
     invoice,
@@ -56,6 +57,7 @@ export async function renderInvoicePdfToBuffer(
     tenantGstin: tenant.gstin,
     tenantAddress: getTenantAddressString(tenant.addressJson),
     tenantPhone: tenant.contactPhone || null,
+    templateId,
   });
 
   const docElement = element as unknown as React.ReactElement<DocumentProps>;
@@ -88,6 +90,7 @@ export async function generateAndStoreInvoicePdf(
   // Fetch tenant info
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
+    include: { settings: true },
   });
 
   if (!tenant) {
@@ -109,7 +112,8 @@ export async function generateAndStoreInvoicePdf(
     : null;
 
   // Render to Buffer
-  const buffer = await renderInvoicePdfToBuffer(serialized, customerDetail, tenant);
+  const templateId = invoice.templateId || tenant.settings?.defaultTemplateId;
+  const buffer = await renderInvoicePdfToBuffer(serialized, customerDetail, tenant, templateId);
 
   // If R2 is not configured, degrade gracefully (D4)
   if (!isR2Configured()) {

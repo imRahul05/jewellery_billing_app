@@ -11,9 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useInvoiceDetail, useFinalizeInvoice, useCancelInvoice, useProcessReturn, useDeleteInvoice } from "@/lib/query/hooks/use-invoices";
+import { useBusinessSettings } from "@/lib/query/hooks/use-business-settings";
 import { useTenantStore } from "@/lib/stores/tenant-store";
 import { invoiceApi, ReturnInvoiceInput } from "@/lib/api/invoices.api";
-import { FileText, ArrowLeft, CreditCard, Ban, Undo2, CheckCircle, Trash2 } from "lucide-react";
+import { InvoicePreviewDialog } from "@/components/billing/invoice-preview-dialog";
+import { FileText, ArrowLeft, CreditCard, Ban, Undo2, CheckCircle, Trash2, Eye } from "lucide-react";
 
 export default function InvoiceDetailPage({
   params,
@@ -29,6 +31,7 @@ export default function InvoiceDetailPage({
 
   // React Query Hooks
   const { data: invoice, isLoading: loading } = useInvoiceDetail(tId, id);
+  const { data: settings } = useBusinessSettings(tId);
   const { mutateAsync: finalizeInvoice, isPending: finalizing } = useFinalizeInvoice(tId);
   const { mutateAsync: cancelInvoice, isPending: cancelling } = useCancelInvoice(tId);
   const { mutateAsync: processReturn, isPending: returning } = useProcessReturn(tId);
@@ -40,6 +43,9 @@ export default function InvoiceDetailPage({
   const isReturnMode = searchParams.get("return") === "true";
   const [returnReason, setReturnReason] = useState<string>("");
   const [returnQuantities, setReturnQuantities] = useState<Record<string, number>>({});
+
+  // Preview dialog state
+  const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
 
   // Cancel dialog state
   const [cancelReason, setCancelReason] = useState<string>("");
@@ -169,6 +175,10 @@ export default function InvoiceDetailPage({
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setIsPreviewOpen(true)}>
+            <Eye className="mr-2 h-4 w-4" /> Preview Bill
+          </Button>
+
           <Button variant="outline" onClick={handleDownloadPdf}>
             <FileText className="mr-2 h-4 w-4" /> Download PDF
           </Button>
@@ -410,6 +420,33 @@ export default function InvoiceDetailPage({
           })()}
         </div>
       </div>
+
+      {invoice && (
+        <InvoicePreviewDialog
+          invoice={{
+            ...invoice,
+            lineItems: invoice.lineItems?.map((l) => ({
+              ...l,
+              makingCharge: l.makingCharge,
+              stoneCharge: l.stoneCharge,
+            })),
+          }}
+          customer={invoice.customer}
+          tenantName={settings?.name || "Jewellery Showroom"}
+          tenantGstin={settings?.gstin}
+          tenantAddress={
+            settings?.addressJson
+              ? typeof settings.addressJson === "string"
+                ? settings.addressJson
+                : (settings.addressJson as { street?: string }).street || null
+              : null
+          }
+          tenantPhone={settings?.contactPhone}
+          defaultTemplate={invoice.templateId || settings?.defaultTemplateId}
+          open={isPreviewOpen}
+          onOpenChange={setIsPreviewOpen}
+        />
+      )}
     </div>
   );
 }
