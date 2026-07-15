@@ -352,16 +352,16 @@ export async function POST(request: Request): Promise<NextResponse> {
               receivedBy: session.userId,
             },
           });
-
-          // Update amount paid/balance due of the draft invoice
-          await tx.invoice.update({
-            where: { id: inv.id },
-            data: {
-              amountPaid: oldGoldValue,
-              balanceDue: inv.grandTotal.sub(oldGoldValue),
-            },
-          });
         }
+
+        // Invalidate cached PDF (if any exists)
+        await tx.fileAsset.deleteMany({
+          where: {
+            tenantId: session.tenantId,
+            purpose: "invoice_pdf",
+            r2Key: `${session.tenantId}/invoices/${inv.id}.pdf`,
+          },
+        });
 
         // Audit log
         await tx.auditLog.create({

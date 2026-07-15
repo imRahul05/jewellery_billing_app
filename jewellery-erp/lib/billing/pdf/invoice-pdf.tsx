@@ -227,100 +227,129 @@ export const InvoicePdfDocument: React.FC<InvoicePdfProps> = ({
         </View>
 
         {/* Table of Line Items */}
-        <View style={styles.table}>
-          <View style={styles.tableHeader}>
-            <Text style={styles.colDesc}>Item Description</Text>
-            <Text style={styles.colKarat}>Karat</Text>
-            <Text style={styles.colWeight}>Weight (Grs)</Text>
-            <Text style={styles.colRate}>Rate</Text>
-            <Text style={styles.colMaking}>Making</Text>
-            <Text style={styles.colStone}>Stone</Text>
-            <Text style={styles.colDiscount}>Discount</Text>
-            <Text style={styles.colTaxable}>Taxable</Text>
-            <Text style={styles.colGst}>GST</Text>
-          </View>
+        {(() => {
+          const hasDiscount = invoice.lineItems?.some((line) => parseFloat(line.discount) > 0) ?? false;
+          const colDescStyle = !hasDiscount ? { ...styles.colDesc, width: "30%" } : styles.colDesc;
 
-          {invoice.lineItems?.map((line, index) => {
-            const cgst = parseFloat(line.cgstAmount);
-            const sgst = parseFloat(line.sgstAmount);
-            const igst = parseFloat(line.igstAmount);
-            const lineGst = igst > 0 ? `${igst.toFixed(2)}` : `${(cgst + sgst).toFixed(2)}`;
+          const goldExchangePayments = invoice.payments?.filter((p) => p.method === "gold_exchange") || [];
+          const hasGoldExchange = goldExchangePayments.length > 0;
+          const grossInvoiceValue = parseFloat(invoice.subtotal) + parseFloat(invoice.cgstTotal) + parseFloat(invoice.sgstTotal) + parseFloat(invoice.igstTotal);
 
-            return (
-              <View style={styles.tableRow} key={line.id || index}>
-                <Text style={styles.colDesc}>{line.description}</Text>
-                <Text style={styles.colKarat}>
-                  {line.karat ? `${line.karat}K` : line.purityFineness ? `${parseFloat(line.purityFineness)}` : "-"}
-                </Text>
-                <Text style={styles.colWeight}>
-                  G: {parseFloat(line.grossWeight).toFixed(3)}g{"\n"}N: {parseFloat(line.netWeight).toFixed(3)}g
-                </Text>
-                <Text style={styles.colRate}>{parseFloat(line.ratePerGram).toFixed(2)}</Text>
-                <Text style={styles.colMaking}>{parseFloat(line.makingCharge).toFixed(2)}</Text>
-                <Text style={styles.colStone}>{parseFloat(line.stoneCharge).toFixed(2)}</Text>
-                <Text style={styles.colDiscount}>-{parseFloat(line.discount).toFixed(2)}</Text>
-                <Text style={styles.colTaxable}>{parseFloat(line.taxableValue).toFixed(2)}</Text>
-                <Text style={styles.colGst}>{lineGst}</Text>
-              </View>
-            );
-          })}
-        </View>
-
-        {/* Summary & Totals */}
-        <View style={styles.summaryContainer}>
-          <View style={styles.wordsSection}>
-            <Text style={styles.boldText}>Amount in Words:</Text>
-            <Text style={{ fontFamily: "Helvetica-Oblique", fontSize: 9, color: "#1e293b", marginBottom: 15 }}>
-              {toIndianWords(parseFloat(invoice.grandTotal))}
-            </Text>
-            
-            <Text style={styles.boldText}>Terms & Conditions:</Text>
-            <Text style={styles.regularText}>1. Goods once sold cannot be returned or exchanged.</Text>
-            <Text style={styles.regularText}>2. Standard weight tolerances and purity apply.</Text>
-            <Text style={styles.regularText}>3. Subject to local state jurisdiction.</Text>
-          </View>
-
-          <View style={styles.totalsSection}>
-            <View style={styles.totalRow}>
-              <Text style={styles.regularText}>Taxable Subtotal:</Text>
-              <Text style={styles.boldText}>INR {invoice.subtotal}</Text>
-            </View>
-            {parseFloat(invoice.cgstTotal) > 0 && (
-              <>
-                <View style={styles.totalRow}>
-                  <Text style={styles.regularText}>CGST (1.5%):</Text>
-                  <Text style={styles.boldText}>INR {invoice.cgstTotal}</Text>
+          return (
+            <>
+              <View style={styles.table}>
+                <View style={styles.tableHeader}>
+                  <Text style={colDescStyle}>Item Description</Text>
+                  <Text style={styles.colKarat}>Karat</Text>
+                  <Text style={styles.colWeight}>Weight (Grs)</Text>
+                  <Text style={styles.colRate}>Rate</Text>
+                  <Text style={styles.colMaking}>Making</Text>
+                  <Text style={styles.colStone}>Stone</Text>
+                  {hasDiscount && <Text style={styles.colDiscount}>Discount</Text>}
+                  <Text style={styles.colTaxable}>Taxable</Text>
+                  <Text style={styles.colGst}>GST</Text>
                 </View>
-                <View style={styles.totalRow}>
-                  <Text style={styles.regularText}>SGST (1.5%):</Text>
-                  <Text style={styles.boldText}>INR {invoice.sgstTotal}</Text>
+
+                {invoice.lineItems?.map((line, index) => {
+                  const cgst = parseFloat(line.cgstAmount);
+                  const sgst = parseFloat(line.sgstAmount);
+                  const igst = parseFloat(line.igstAmount);
+                  const lineGst = igst > 0 ? `${igst.toFixed(2)}` : `${(cgst + sgst).toFixed(2)}`;
+                  const lineDiscountVal = parseFloat(line.discount);
+
+                  return (
+                    <View style={styles.tableRow} key={line.id || index}>
+                      <Text style={colDescStyle}>{line.description}</Text>
+                      <Text style={styles.colKarat}>
+                        {line.karat ? `${line.karat}K` : line.purityFineness ? `${parseFloat(line.purityFineness)}` : "-"}
+                      </Text>
+                      <Text style={styles.colWeight}>
+                        G: {parseFloat(line.grossWeight).toFixed(3)}g{"\n"}N: {parseFloat(line.netWeight).toFixed(3)}g
+                      </Text>
+                      <Text style={styles.colRate}>{parseFloat(line.ratePerGram).toFixed(2)}</Text>
+                      <Text style={styles.colMaking}>{parseFloat(line.makingCharge).toFixed(2)}</Text>
+                      <Text style={styles.colStone}>{parseFloat(line.stoneCharge).toFixed(2)}</Text>
+                      {hasDiscount && (
+                        <Text style={styles.colDiscount}>
+                          {lineDiscountVal > 0 ? `-${lineDiscountVal.toFixed(2)}` : "-"}
+                        </Text>
+                      )}
+                      <Text style={styles.colTaxable}>{parseFloat(line.taxableValue).toFixed(2)}</Text>
+                      <Text style={styles.colGst}>{lineGst}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+
+              {/* Summary & Totals */}
+              <View style={styles.summaryContainer}>
+                <View style={styles.wordsSection}>
+                  <Text style={styles.boldText}>Amount in Words:</Text>
+                  <Text style={{ fontFamily: "Helvetica-Oblique", fontSize: 9, color: "#1e293b", marginBottom: 15 }}>
+                    {toIndianWords(parseFloat(invoice.grandTotal))}
+                  </Text>
+                  
+                  <Text style={styles.boldText}>Terms & Conditions:</Text>
+                  <Text style={styles.regularText}>1. Goods once sold cannot be returned or exchanged.</Text>
+                  <Text style={styles.regularText}>2. Standard weight tolerances and purity apply.</Text>
+                  <Text style={styles.regularText}>3. Subject to local state jurisdiction.</Text>
                 </View>
-              </>
-            )}
-            {parseFloat(invoice.igstTotal) > 0 && (
-              <View style={styles.totalRow}>
-                <Text style={styles.regularText}>IGST (3.0%):</Text>
-                <Text style={styles.boldText}>INR {invoice.igstTotal}</Text>
+
+                <View style={styles.totalsSection}>
+                  <View style={styles.totalRow}>
+                    <Text style={styles.regularText}>Taxable Subtotal:</Text>
+                    <Text style={styles.boldText}>INR {invoice.subtotal}</Text>
+                  </View>
+                  {parseFloat(invoice.cgstTotal) > 0 && (
+                    <>
+                      <View style={styles.totalRow}>
+                        <Text style={styles.regularText}>CGST (1.5%):</Text>
+                        <Text style={styles.boldText}>INR {invoice.cgstTotal}</Text>
+                      </View>
+                      <View style={styles.totalRow}>
+                        <Text style={styles.regularText}>SGST (1.5%):</Text>
+                        <Text style={styles.boldText}>INR {invoice.sgstTotal}</Text>
+                      </View>
+                    </>
+                  )}
+                  {parseFloat(invoice.igstTotal) > 0 && (
+                    <View style={styles.totalRow}>
+                      <Text style={styles.regularText}>IGST (3.0%):</Text>
+                      <Text style={styles.boldText}>INR {invoice.igstTotal}</Text>
+                    </View>
+                  )}
+
+                  {hasGoldExchange && (
+                    <>
+                      <View style={styles.totalRow}>
+                        <Text style={styles.regularText}>Total Invoice Value:</Text>
+                        <Text style={styles.boldText}>INR {grossInvoiceValue.toFixed(2)}</Text>
+                      </View>
+                      {goldExchangePayments.map((p, idx) => (
+                        <View style={styles.totalRow} key={p.id || idx}>
+                          <Text style={styles.regularText}>
+                            Old Gold Deduction ({p.exchangeMetalWeight ? parseFloat(p.exchangeMetalWeight).toFixed(3) : "0.000"}g):
+                          </Text>
+                          <Text style={styles.boldText}>-INR {parseFloat(p.exchangeMetalValue || p.amount).toFixed(2)}</Text>
+                        </View>
+                      ))}
+                    </>
+                  )}
+
+                  <View style={styles.totalRow}>
+                    <Text style={styles.regularText}>Round Off:</Text>
+                    <Text style={styles.boldText}>INR {invoice.roundOff}</Text>
+                  </View>
+                  
+                  <View style={styles.grandTotalRow}>
+                    <Text style={{ fontFamily: "Helvetica-Bold" }}>{hasGoldExchange ? "Net Payable:" : "Grand Total:"}</Text>
+                    <Text style={{ fontFamily: "Helvetica-Bold" }}>INR {invoice.grandTotal}</Text>
+                  </View>
+                </View>
               </View>
-            )}
-            <View style={styles.totalRow}>
-              <Text style={styles.regularText}>Round Off:</Text>
-              <Text style={styles.boldText}>INR {invoice.roundOff}</Text>
-            </View>
-            <View style={styles.grandTotalRow}>
-              <Text style={{ fontFamily: "Helvetica-Bold" }}>Grand Total:</Text>
-              <Text style={{ fontFamily: "Helvetica-Bold" }}>INR {invoice.grandTotal}</Text>
-            </View>
-            {invoice.payments?.filter((p) => p.method === "gold_exchange").map((p, idx) => (
-              <View style={styles.totalRow} key={p.id || idx}>
-                <Text style={styles.regularText}>
-                  Old Gold Deduction ({p.exchangeMetalWeight ? parseFloat(p.exchangeMetalWeight).toFixed(3) : "0.000"}g):
-                </Text>
-                <Text style={styles.boldText}>-INR {parseFloat(p.exchangeMetalValue || p.amount).toFixed(2)}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
+            </>
+          );
+        })()}
 
         {/* Footer */}
         <View style={styles.footer}>

@@ -63,6 +63,15 @@ export async function POST(
           }
         }
 
+        // Invalidate cached PDF
+        await tx.fileAsset.deleteMany({
+          where: {
+            tenantId: session.tenantId,
+            purpose: "invoice_pdf",
+            r2Key: `${session.tenantId}/invoices/${id}.pdf`,
+          },
+        });
+
         // Set status to cancelled and balance due to 0
         const updatedInvoice = await tx.invoice.update({
           where: { id },

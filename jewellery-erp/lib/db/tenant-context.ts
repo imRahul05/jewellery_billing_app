@@ -16,7 +16,15 @@ export interface TenantContext {
   isSuperAdmin: boolean;
 }
 
-const tenantStore = new AsyncLocalStorage<TenantContext>();
+const globalForTenant = globalThis as unknown as {
+  __tenantStore: AsyncLocalStorage<TenantContext> | undefined;
+};
+
+const tenantStore = globalForTenant.__tenantStore ?? new AsyncLocalStorage<TenantContext>();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForTenant.__tenantStore = tenantStore;
+}
 
 /**
  * Read the active tenant context. Throws when unbound so that a query can

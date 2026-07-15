@@ -118,6 +118,15 @@ export async function POST(
           newStatus = "partially_paid";
         }
 
+        // Invalidate cached PDF
+        await tx.fileAsset.deleteMany({
+          where: {
+            tenantId: session.tenantId,
+            purpose: "invoice_pdf",
+            r2Key: `${session.tenantId}/invoices/${id}.pdf`,
+          },
+        });
+
         const updatedInvoice = await tx.invoice.update({
           where: { id },
           data: {

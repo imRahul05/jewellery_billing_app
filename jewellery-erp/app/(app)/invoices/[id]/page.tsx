@@ -338,57 +338,76 @@ export default function InvoiceDetailPage({
 
         {/* Ledger & Totals */}
         <div className="space-y-6">
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle>Financial Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span>Taxable Subtotal:</span>
-                <span className="font-semibold">₹{parseFloat(invoice.subtotal).toFixed(2)}</span>
-              </div>
-              {parseFloat(invoice.cgstTotal) > 0 && (
-                <>
+          {(() => {
+            const goldExchangePayments = invoice.payments?.filter((p) => p.method === "gold_exchange") || [];
+            const hasGoldExchange = goldExchangePayments.length > 0;
+            const grossInvoiceValue = parseFloat(invoice.subtotal) + parseFloat(invoice.cgstTotal) + parseFloat(invoice.sgstTotal) + parseFloat(invoice.igstTotal);
+
+            return (
+              <Card className="shadow-md">
+                <CardHeader>
+                  <CardTitle>Financial Summary</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
                   <div className="flex justify-between">
-                    <span>CGST (1.5%):</span>
-                    <span className="font-semibold">₹{parseFloat(invoice.cgstTotal).toFixed(2)}</span>
+                    <span>Taxable Subtotal:</span>
+                    <span className="font-semibold">₹{parseFloat(invoice.subtotal).toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>SGST (1.5%):</span>
-                    <span className="font-semibold">₹{parseFloat(invoice.sgstTotal).toFixed(2)}</span>
+                  {parseFloat(invoice.cgstTotal) > 0 && (
+                    <>
+                      <div className="flex justify-between">
+                        <span>CGST (1.5%):</span>
+                        <span className="font-semibold">₹{parseFloat(invoice.cgstTotal).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>SGST (1.5%):</span>
+                        <span className="font-semibold">₹{parseFloat(invoice.sgstTotal).toFixed(2)}</span>
+                      </div>
+                    </>
+                  )}
+                  {parseFloat(invoice.igstTotal) > 0 && (
+                    <div className="flex justify-between">
+                      <span>IGST (3.0%):</span>
+                      <span className="font-semibold">₹{parseFloat(invoice.igstTotal).toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {hasGoldExchange && (
+                    <>
+                      <div className="flex justify-between border-t pt-2">
+                        <span>Total Invoice Value:</span>
+                        <span className="font-semibold">₹{grossInvoiceValue.toFixed(2)}</span>
+                      </div>
+                      {goldExchangePayments.map((p) => (
+                        <div key={p.id} className="flex justify-between text-sm text-emerald-600 font-medium">
+                          <span>Old Gold Exchange ({p.exchangeMetalWeight ? parseFloat(p.exchangeMetalWeight).toFixed(3) : "0.000"}g):</span>
+                          <span>-₹{parseFloat(p.exchangeMetalValue || p.amount).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  <div className="flex justify-between border-t pt-2">
+                    <span>Round Off:</span>
+                    <span className="font-semibold">₹{parseFloat(invoice.roundOff).toFixed(2)}</span>
                   </div>
-                </>
-              )}
-              {parseFloat(invoice.igstTotal) > 0 && (
-                <div className="flex justify-between">
-                  <span>IGST (3.0%):</span>
-                  <span className="font-semibold">₹{parseFloat(invoice.igstTotal).toFixed(2)}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span>Round Off:</span>
-                <span className="font-semibold">₹{parseFloat(invoice.roundOff).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between border-t pt-2 text-base font-bold text-slate-900 dark:text-white">
-                <span>Grand Total:</span>
-                <span>₹{parseFloat(invoice.grandTotal).toFixed(2)}</span>
-              </div>
-              {invoice.payments?.filter((p) => p.method === "gold_exchange").map((p) => (
-                <div key={p.id} className="flex justify-between text-sm text-emerald-600 font-medium">
-                  <span>Old Gold Exchange ({p.exchangeMetalWeight ? parseFloat(p.exchangeMetalWeight).toFixed(3) : "0.000"}g):</span>
-                  <span>-₹{parseFloat(p.exchangeMetalValue || p.amount).toFixed(2)}</span>
-                </div>
-              ))}
-              <div className="flex justify-between border-t pt-2 text-sm font-semibold text-emerald-600">
-                <span>Amount Paid:</span>
-                <span>₹{parseFloat(invoice.amountPaid).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-sm font-semibold text-rose-600">
-                <span>Balance Due:</span>
-                <span>₹{parseFloat(invoice.balanceDue).toFixed(2)}</span>
-              </div>
-            </CardContent>
-          </Card>
+                  <div className="flex justify-between border-t pt-2 text-base font-bold text-slate-900 dark:text-white">
+                    <span>{hasGoldExchange ? "Net Payable:" : "Grand Total:"}</span>
+                    <span>₹{parseFloat(invoice.grandTotal).toFixed(2)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between border-t pt-2 text-sm font-semibold text-emerald-600">
+                    <span>Amount Paid:</span>
+                    <span>₹{parseFloat(invoice.amountPaid).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-semibold text-rose-600">
+                    <span>Balance Due:</span>
+                    <span>₹{parseFloat(invoice.balanceDue).toFixed(2)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
         </div>
       </div>
     </div>
