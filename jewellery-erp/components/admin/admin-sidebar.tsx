@@ -24,7 +24,7 @@ export function AdminSidebar() {
         </span>
         <span className="truncate font-semibold">Platform Admin</span>
       </div>
-      <nav className="flex-1 space-y-1 p-2" aria-label="Admin navigation">
+      <nav className="flex-1 space-y-1 p-2 overflow-y-auto" aria-label="Admin navigation">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const exactActive = href === "/admin/businesses"
             ? (pathname === "/admin/businesses" || pathname.startsWith("/admin/businesses/"))

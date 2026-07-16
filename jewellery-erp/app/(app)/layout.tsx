@@ -33,14 +33,14 @@ export default async function ApplicationLayout({ children }: { children: React.
         getEffectivePermissions(session.userId, session.tenantId),
       ]);
       return (
-        <div className="flex min-h-svh flex-col bg-muted/20">
+        <div className="flex h-svh flex-col bg-muted/20 overflow-hidden">
           {isImpersonating && <ImpersonationBanner tenantName={tenant.name} />}
-          <div className="flex min-w-0 flex-1">
+          <div className="flex min-w-0 flex-1 min-h-0">
             <TenantHydrator tenant={tenant} permissions={Array.from(perms)} isSuperAdmin={session.isSuperAdmin} />
             <AppSidebar />
-            <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex min-w-0 flex-1 flex-col min-h-0 overflow-hidden">
               <Topbar userName={user.fullName || user.email} />
-              <main className="flex-1 p-4 md:p-6 lg:p-8">{children}</main>
+              <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">{children}</main>
             </div>
           </div>
         </div>
