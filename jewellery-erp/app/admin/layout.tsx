@@ -15,9 +15,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
 
       return (
-        <div className="flex min-h-svh bg-muted/20">
+        <div className="flex h-svh bg-muted/20 overflow-hidden">
           <AdminSidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-w-0 flex-1 flex-col min-h-0 overflow-hidden">
             <header className="flex h-16 items-center justify-between border-b bg-background px-4 md:px-6">
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-red-600 dark:text-red-400">
@@ -33,7 +33,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 <AdminUserMenu userName={user.fullName || user.email} />
               </div>
             </header>
-            <main className="flex-1 p-4 md:p-6 lg:p-8">
+            <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">
               {children}
             </main>
           </div>
