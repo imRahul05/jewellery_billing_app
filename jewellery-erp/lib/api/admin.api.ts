@@ -55,6 +55,7 @@ export interface PlatformStats {
   totalUsers: number;
   totalInvoices: number;
   tenantGrowth: { month: string; count: number }[];
+  businessActivity: { businessName: string; activityCount: number }[];
 }
 
 export interface PlatformPlan {
@@ -118,7 +119,8 @@ export const adminApi = {
   listPlans: () => api.get<PlatformPlan[]>("/admin/plans"),
   savePlan: (data: Partial<PlatformPlan>) => api.post<PlatformPlan>("/admin/plans", data),
   searchUsers: (search: string) => api.get<PlatformUser[]>("/admin/users", { search }),
-  getPlatformAuditLogs: () => api.get<PlatformAuditLog[]>("/admin/audit"),
+  getPlatformAuditLogs: (params?: { page?: number; limit?: number; search?: string }) =>
+    api.get<PlatformAuditLog[]>("/admin/audit", params),
   startImpersonation: (tenantId: string) => api.post<{ success: boolean }>("/admin/impersonate/start", { tenantId }),
   stopImpersonation: () => api.post<{ success: boolean }>("/admin/impersonate/stop"),
 };

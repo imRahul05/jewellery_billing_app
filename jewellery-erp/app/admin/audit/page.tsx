@@ -15,17 +15,32 @@ export default function PlatformAuditPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [selectedLog, setSelectedLog] = useState<PlatformAuditLog | null>(null);
+  const limit = 10;
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setPage(1);
+    }, 400);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchTerm]);
 
   const loadLogs = async () => {
     setIsRefreshing(true);
     try {
-      const res = await adminApi.getPlatformAuditLogs();
+      const res = await adminApi.getPlatformAuditLogs({ page, limit, search: debouncedSearch });
       setLogs(res.data);
+      setTotalCount(res.meta?.count ?? 0);
     } catch {
       toast.error("Failed to load platform audit logs");
     } finally {
-      setIsLoading(false);
       setIsRefreshing(false);
     }
   };
@@ -35,16 +50,16 @@ export default function PlatformAuditPage() {
 
     async function fetchLogs() {
       try {
-        const res = await adminApi.getPlatformAuditLogs();
+        const res = await adminApi.getPlatformAuditLogs({ page, limit, search: debouncedSearch });
         if (active) {
           setLogs(res.data);
+          setTotalCount(res.meta?.count ?? 0);
         }
       } catch {
         toast.error("Failed to load platform audit logs");
       } finally {
         if (active) {
           setIsLoading(false);
-          setIsRefreshing(false);
         }
       }
     }
@@ -54,19 +69,9 @@ export default function PlatformAuditPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [page, debouncedSearch]);
 
-  const filtered = logs.filter((l) => {
-    const term = searchTerm.toLowerCase();
-    return (
-      l.action.toLowerCase().includes(term) ||
-      l.entityType.toLowerCase().includes(term) ||
-      l.tenantName.toLowerCase().includes(term) ||
-      (l.entityId || "").toLowerCase().includes(term) ||
-      (l.actor?.email || "").toLowerCase().includes(term) ||
-      (l.actor?.fullName || "").toLowerCase().includes(term)
-    );
-  });
+  const filtered = logs;
 
   return (
     <div className="space-y-6">
@@ -114,74 +119,99 @@ export default function PlatformAuditPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto border rounded-md">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Time</TableHead>
-                    <TableHead>Business Tenant</TableHead>
-                    <TableHead>Actor</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Target Entity</TableHead>
-                    <TableHead>IP Address</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((l) => (
-                    <TableRow
-                      key={l.id}
-                      className="cursor-pointer hover:bg-muted/40 transition-colors"
-                      onClick={() => setSelectedLog(l)}
-                    >
-                      <TableCell className="text-xs font-mono">
-                        {new Date(l.occurredAt).toLocaleString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                        })}
-                      </TableCell>
-                      <TableCell className="font-semibold text-xs text-red-600 dark:text-red-400">
-                        {l.tenantName}
-                      </TableCell>
-                      <TableCell className="max-w-[180px] truncate">
-                        <div className="font-semibold text-xs leading-none">
-                          {l.actor?.fullName || "System"}
-                        </div>
-                        <div className="text-[9px] text-muted-foreground mt-0.5 leading-none">
-                          {l.actor?.email || "system@platform.com"}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold capitalize ${
-                            l.action === "create"
-                              ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
-                              : l.action === "delete" || l.action === "soft_delete"
-                              ? "bg-destructive/10 text-destructive border border-destructive/20"
-                              : "bg-primary/10 text-primary border border-primary/20"
-                          }`}
-                        >
-                          {l.action.replace("_", " ")}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        <span className="font-semibold">{l.entityType}</span>
-                        {l.entityId && (
-                          <span className="text-muted-foreground ml-1 font-mono text-[9px]">
-                            ({l.entityId.slice(0, 8)}...)
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-xs font-mono text-muted-foreground">
-                        {l.ipAddress || "Internal"}
-                      </TableCell>
+            <>
+              <div className="overflow-x-auto border rounded-md">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Time</TableHead>
+                      <TableHead>Business Tenant</TableHead>
+                      <TableHead>Actor</TableHead>
+                      <TableHead>Action</TableHead>
+                      <TableHead>Target Entity</TableHead>
+                      <TableHead>IP Address</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((l) => (
+                      <TableRow
+                        key={l.id}
+                        className="cursor-pointer hover:bg-muted/40 transition-colors"
+                        onClick={() => setSelectedLog(l)}
+                      >
+                        <TableCell className="text-xs font-mono">
+                          {new Date(l.occurredAt).toLocaleString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                          })}
+                        </TableCell>
+                        <TableCell className="font-semibold text-xs text-red-600 dark:text-red-400">
+                          {l.tenantName}
+                        </TableCell>
+                        <TableCell className="max-w-[180px] truncate">
+                          <div className="font-semibold text-xs leading-none">
+                            {l.actor?.fullName || "System"}
+                          </div>
+                          <div className="text-[9px] text-muted-foreground mt-0.5 leading-none">
+                            {l.actor?.email || "system@platform.com"}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold capitalize ${
+                              l.action === "create"
+                                ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                                : l.action === "delete" || l.action === "soft_delete"
+                                ? "bg-destructive/10 text-destructive border border-destructive/20"
+                                : "bg-primary/10 text-primary border border-primary/20"
+                            }`}
+                          >
+                            {l.action.replace("_", " ")}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <span className="font-semibold">{l.entityType}</span>
+                          {l.entityId && (
+                            <span className="text-muted-foreground ml-1 font-mono text-[9px]">
+                              ({l.entityId.slice(0, 8)}...)
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs font-mono text-muted-foreground">
+                          {l.ipAddress || "Internal"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t mt-4">
+                <div className="text-xs text-muted-foreground font-mono">
+                  Showing Page {page} ({(page - 1) * limit + 1}–{Math.min(page * limit, totalCount)} of {totalCount} events)
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                    disabled={page === 1 || isLoading}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => p + 1)}
+                    disabled={page * limit >= totalCount || isLoading}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

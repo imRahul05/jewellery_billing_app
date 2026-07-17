@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { adminApi, type PlatformStats } from "@/lib/api/admin.api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Building2, RefreshCw, ShieldAlert, Users, ScrollText } from "lucide-react";
+import { BarChart3, Building2, RefreshCw, ShieldAlert, Users, ScrollText, Activity } from "lucide-react";
 import { toast } from "sonner";
 
 export default function AdminOverviewPage() {
@@ -225,6 +225,55 @@ export default function AdminOverviewPage() {
                     OK
                   </span>
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3">
+            <Card className="md:col-span-3">
+              <CardHeader>
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Activity className="size-4 text-red-500" />
+                  Business Activity (Last 30 Days)
+                </CardTitle>
+                <CardDescription>
+                  Audit log operations volume per business tenant.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-2">
+                {!stats || !stats.businessActivity || stats.businessActivity.length === 0 ? (
+                  <div className="flex h-32 items-center justify-center text-xs text-muted-foreground">
+                    No activity recorded in the last 30 days.
+                  </div>
+                ) : (
+                  <div className="space-y-4 pt-2">
+                    {stats.businessActivity.map((activity, idx) => {
+                      const maxVal = Math.max(
+                        ...stats.businessActivity.map((a) => a.activityCount),
+                        1
+                      );
+                      const widthPercent = (activity.activityCount / maxVal) * 100;
+                      return (
+                        <div key={idx} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs font-semibold">
+                            <span className="truncate max-w-[250px] sm:max-w-[400px] text-foreground" title={activity.businessName}>
+                              {activity.businessName}
+                            </span>
+                            <span className="font-mono text-muted-foreground text-[11px]">
+                              {activity.activityCount.toLocaleString()} {activity.activityCount === 1 ? 'operation' : 'operations'}
+                            </span>
+                          </div>
+                          <div className="h-2.5 w-full bg-muted/60 rounded-full overflow-hidden">
+                            <div
+                              style={{ width: `${widthPercent}%` }}
+                              className="h-full bg-gradient-to-r from-red-600 via-amber-500 to-emerald-500 rounded-full transition-all duration-500 hover:opacity-90"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
