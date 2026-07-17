@@ -7,6 +7,7 @@ export interface PlatformStats {
   totalUsers: number;
   totalInvoices: number;
   tenantGrowth: { month: string; count: number }[];
+  businessActivity: { businessName: string; activityCount: number }[];
 }
 
 /**
@@ -26,7 +27,7 @@ export async function getPlatformStatsQuery(): Promise<PlatformStats> {
   // Aggregate monthly tenant growth (last 6 months)
   const tenants = await prismaAdmin.tenant.findMany({
     where: { deletedAt: null },
-    select: { createdAt: true },
+    select: { id: true, name: true, createdAt: true },
     orderBy: { createdAt: "asc" },
   });
 
@@ -41,11 +42,39 @@ export async function getPlatformStatsQuery(): Promise<PlatformStats> {
     count,
   })).slice(-6); // Last 6 months
 
+  // Aggregate business wise activity (last 30 days) - DB friendly query
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const activeLogsGrouped = await prismaAdmin.auditLog.groupBy({
+    by: ["tenantId"],
+    where: {
+      occurredAt: { gte: thirtyDaysAgo },
+    },
+    _count: {
+      id: true,
+    },
+  });
+
+  const tenantMap = new Map<string, string>();
+  for (const t of tenants) {
+    tenantMap.set(t.id, t.name);
+  }
+
+  const businessActivity = activeLogsGrouped
+    .map((group) => ({
+      businessName: group.tenantId ? (tenantMap.get(group.tenantId) ?? "Unknown Tenant") : "Platform / Global",
+      activityCount: group._count.id,
+    }))
+    .sort((a, b) => b.activityCount - a.activityCount)
+    .slice(0, 10);
+
   return {
     totalTenants,
     activeTenants,
     totalUsers,
     totalInvoices,
     tenantGrowth,
+    businessActivity,
   };
 }
