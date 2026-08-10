@@ -30,3 +30,16 @@ export async function signInWithEmail(
 
   redirect("/dashboard");
 }
+
+export async function signInAsDemo(): Promise<AuthActionState> {
+  const { error } = await auth.signIn.email({
+    email: "demo@jewelleryerp.com",
+    password: "demo-password-1234",
+  });
+
+  if (error) {
+    return { error: "Failed to sign into demo account. Have you run the seed script?" };
+  }
+
+  redirect("/dashboard");
+}

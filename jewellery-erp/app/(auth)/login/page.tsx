@@ -3,14 +3,15 @@
 import * as React from "react";
 import Link from "next/link";
 import { useActionState } from "react";
-import { signInWithEmail } from "./actions";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { signInWithEmail, signInAsDemo } from "./actions";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
   const [state, formAction, isPending] = useActionState(signInWithEmail, null);
+  const [demoState, demoFormAction, isDemoPending] = useActionState(signInAsDemo, null);
 
   return (
     <Card className="shadow-lg border bg-card/50 backdrop-blur-sm">
@@ -61,8 +62,30 @@ export default function LoginPage() {
             </div>
           )}
 
-          <Button type="submit" className="w-full" disabled={isPending}>
+          <Button type="submit" className="w-full" disabled={isPending || isDemoPending}>
             {isPending ? "Signing In..." : "Sign In"}
+          </Button>
+        </form>
+
+        <div className="relative my-4">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-border" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-card/50 backdrop-blur-sm px-2 text-muted-foreground">
+              Or
+            </span>
+          </div>
+        </div>
+
+        <form action={demoFormAction}>
+          {demoState?.error && (
+            <div className="mb-4 rounded-lg bg-destructive/10 p-3 text-xs text-destructive border border-destructive/20 font-medium">
+              {demoState.error}
+            </div>
+          )}
+          <Button type="submit" variant="secondary" className="w-full font-medium" disabled={isPending || isDemoPending}>
+            {isDemoPending ? "Entering Demo..." : "Try Demo"}
           </Button>
         </form>
       </CardContent>
