@@ -14,6 +14,7 @@ import { useInvoiceDetail, useFinalizeInvoice, useCancelInvoice, useProcessRetur
 import { useBusinessSettings } from "@/lib/query/hooks/use-business-settings";
 import { useTenantStore } from "@/lib/stores/tenant-store";
 import { invoiceApi, ReturnInvoiceInput } from "@/lib/api/invoices.api";
+import { formatAddress } from "@/lib/api/business.api";
 import { InvoicePreviewDialog } from "@/components/billing/invoice-preview-dialog";
 import { FileText, ArrowLeft, CreditCard, Ban, Undo2, CheckCircle, Trash2, Eye, Loader2 } from "lucide-react";
 
@@ -408,14 +409,35 @@ export default function InvoiceDetailPage({
                     <span>₹{parseFloat(invoice.grandTotal).toFixed(2)}</span>
                   </div>
                   
-                  <div className="flex justify-between border-t pt-2 text-sm font-semibold text-emerald-600">
-                    <span>Amount Paid:</span>
-                    <span>₹{parseFloat(invoice.amountPaid).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm font-semibold text-rose-600">
-                    <span>Balance Due:</span>
-                    <span>₹{parseFloat(invoice.balanceDue).toFixed(2)}</span>
-                  </div>
+                  {(() => {
+                    const nonGoldPayments = invoice.payments?.filter((p) => p.method !== "gold_exchange") || [];
+                    return (
+                      <>
+                        {nonGoldPayments.map((p) => (
+                          <div key={p.id} className="flex justify-between text-xs text-emerald-600 font-medium">
+                            <span>Paid via {p.method.toUpperCase()}{p.referenceNo ? ` (${p.referenceNo})` : ""}:</span>
+                            <span>₹{parseFloat(p.amount).toFixed(2)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between border-t pt-2 text-sm font-semibold text-emerald-600">
+                          <span>Total Amount Paid:</span>
+                          <span>₹{parseFloat(invoice.amountPaid).toFixed(2)}</span>
+                        </div>
+                        <div className={`flex justify-between text-sm font-semibold ${
+                          parseFloat(invoice.balanceDue) > 0 ? "text-amber-600" : "text-emerald-600"
+                        }`}>
+                          <span>Balance Due:</span>
+                          <span>₹{parseFloat(invoice.balanceDue).toFixed(2)}</span>
+                        </div>
+                        {invoice.dueDate && parseFloat(invoice.balanceDue) > 0 && (
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Due Date:</span>
+                            <span>{new Date(invoice.dueDate).toLocaleDateString("en-IN")}</span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             );
@@ -436,13 +458,7 @@ export default function InvoiceDetailPage({
           customer={invoice.customer}
           tenantName={settings?.name || "Jewellery Showroom"}
           tenantGstin={settings?.gstin}
-          tenantAddress={
-            settings?.addressJson
-              ? typeof settings.addressJson === "string"
-                ? settings.addressJson
-                : (settings.addressJson as { street?: string }).street || null
-              : null
-          }
+          tenantAddress={formatAddress(settings?.addressJson)}
           tenantPhone={settings?.contactPhone}
           defaultTemplate={invoice.templateId || settings?.defaultTemplateId}
           open={isPreviewOpen}

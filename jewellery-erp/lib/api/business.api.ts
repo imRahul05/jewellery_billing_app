@@ -20,6 +20,19 @@ export function isAddressDetails(val: unknown): val is AddressDetails {
   );
 }
 
+export function formatAddress(address: unknown): string | null {
+  if (!address) return null;
+  if (typeof address === "string") return address.trim() || null;
+  if (typeof address === "object" && address !== null) {
+    const addr = address as Partial<AddressDetails>;
+    const parts = [addr.street, addr.city, addr.state, addr.postalCode, addr.country]
+      .filter((p): p is string => typeof p === "string" && p.trim().length > 0)
+      .map((p) => p.trim());
+    return parts.length > 0 ? parts.join(", ") : null;
+  }
+  return null;
+}
+
 export type PaymentModeDefault = "cash" | "upi" | "card" | "split" | "due";
 
 export interface UnifiedBusinessSettings {

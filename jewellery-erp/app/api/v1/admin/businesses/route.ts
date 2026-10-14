@@ -114,12 +114,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
 
     let signupData;
-    const responseText = await signupRes.text();
-    try {
-      signupData = JSON.parse(responseText);
-    } catch (e) {
-      console.error("Non-JSON response from auth system:", responseText);
-      return NextResponse.json({ error: "Auth system error: " + responseText.substring(0, 100) }, { status: 500 });
+    if (typeof signupRes.text === "function") {
+      const responseText = await signupRes.text();
+      try {
+        signupData = JSON.parse(responseText);
+      } catch {
+        return NextResponse.json({ error: "Auth system error: " + responseText.substring(0, 100) }, { status: 500 });
+      }
+    } else {
+      signupData = await signupRes.json();
     }
 
     if (!signupRes.ok || signupData.error) {

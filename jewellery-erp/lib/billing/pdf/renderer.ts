@@ -6,6 +6,7 @@ import { InvoicePdfDocument } from "./invoice-pdf";
 import { SerializedInvoice } from "@/app/api/v1/invoices/route";
 import { FileAsset, Tenant } from "@prisma/client";
 import { Readable } from "stream";
+import { formatAddress } from "@/lib/api/business.api";
 
 interface CustomerDetails {
   name: string;
@@ -15,22 +16,8 @@ interface CustomerDetails {
   addressJson: unknown;
 }
 
-interface AddressDetails {
-  street?: string;
-  city?: string;
-  state?: string;
-  postalCode?: string;
-}
-
 function getTenantAddressString(addressJson: unknown): string | null {
-  if (!addressJson) return null;
-  if (typeof addressJson === "string") return addressJson;
-  try {
-    const addr = addressJson as AddressDetails;
-    return [addr.street, addr.city, addr.state, addr.postalCode].filter(Boolean).join(", ") || null;
-  } catch {
-    return null;
-  }
+  return formatAddress(addressJson);
 }
 
 async function streamToBuffer(stream: Readable): Promise<Buffer> {
