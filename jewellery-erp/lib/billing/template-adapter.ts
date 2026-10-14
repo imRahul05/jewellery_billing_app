@@ -17,6 +17,7 @@ import {
 } from "@/types/category.types";
 import { toIndianWords } from "./indian-words";
 import { formatAddress, type AddressDetails } from "@/lib/api/business.api";
+import type { Prisma } from "@prisma/client";
 
 export interface AdapterLineItemInput {
   id?: string;
@@ -73,19 +74,25 @@ export interface AdapterInvoiceInput {
   payments?: AdapterPaymentInput[];
 }
 
+export type RawAddressInput =
+  | Prisma.JsonValue
+  | string
+  | (Partial<AddressDetails> & { pincode?: string; stateCode?: string })
+  | undefined;
+
 export interface AdapterCustomerInput {
   name: string;
   phone?: string | null;
   email?: string | null;
   gstin?: string | null;
-  addressJson?: unknown;
+  addressJson?: RawAddressInput;
 }
 
 export interface AdapterTenantInput {
   name: string;
   gstin?: string | null;
   address?: string | null;
-  addressJson?: unknown;
+  addressJson?: RawAddressInput;
   contactPhone?: string | null;
   contactEmail?: string | null;
   pan?: string | null;
@@ -93,7 +100,7 @@ export interface AdapterTenantInput {
   logoAssetId?: string | null;
 }
 
-function parseAddressObj(addr: unknown): Address {
+function parseAddressObj(addr: RawAddressInput): Address {
   if (!addr) {
     return { street: "", city: "", state: "", stateCode: "", pincode: "", country: "India" };
   }
@@ -316,7 +323,7 @@ export function adaptInvoiceToTemplateData(
     roundOff: roundOffAmount !== 0,
     declaration:
       "Certified that the particulars given above are true and correct and the amount indicated represents the price actually charged.",
-    showUpiQr: Boolean(tenant?.upiId),
+    showUpiQr: false,
     showBankDetails: true,
     showSignature: true,
   };

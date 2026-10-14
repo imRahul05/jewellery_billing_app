@@ -2,7 +2,6 @@ import React from "react";
 import { TemplateProps } from "@/types/template.types";
 import { GoldItem } from "@/types/category.types";
 import { formatCurrency, formatGrams } from "@/lib/formatters/currency";
-import { UpiQrBlock } from "../shared/UpiQrBlock";
 import { cn } from "@/lib/utils";
 
 export function GoldThermalReceipt80mm({ invoice, isThumbnail = false, className }: TemplateProps) {
@@ -88,11 +87,8 @@ export function GoldThermalReceipt80mm({ invoice, isThumbnail = false, className
         </div>
       </div>
 
-      {/* QR & Footer */}
+      {/* Footer */}
       <div className="pt-2 text-center space-y-2">
-        <div className="flex justify-center">
-          <UpiQrBlock upiId={seller.upiId} payeeName={seller.tradeName || seller.legalName} grandTotal={summary.grandTotal} invoiceNumber={invoice.invoice.invoiceNumber} className="p-0 border-none bg-transparent" />
-        </div>
         <p className="text-[9px] text-neutral-600">
           * BIS 100% Hallmarked Jewellery Guarantee *<br />
           Thank You for Shopping with Us!

@@ -5,13 +5,12 @@ import { formatCurrency, formatGrams } from "@/lib/formatters/currency";
 import { TemplateHeader } from "../shared/TemplateHeader";
 import { BuyerDetailsBlock } from "../shared/BuyerDetailsBlock";
 import { TaxSummaryTable } from "../shared/TaxSummaryTable";
-import { UpiQrBlock } from "../shared/UpiQrBlock";
 import { SignatureBlock } from "../shared/SignatureBlock";
 import { cn } from "@/lib/utils";
 import { Sparkle } from "lucide-react";
 
 export function GoldPolkiHeritage({ invoice, isThumbnail = false, className }: TemplateProps) {
-  const { items, summary, billingMode, seller } = invoice;
+  const { items, summary, billingMode } = invoice;
   const isGst = billingMode === "gst";
   const goldItems = items as GoldItem[];
 
@@ -97,8 +96,7 @@ export function GoldPolkiHeritage({ invoice, isThumbnail = false, className }: T
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-yellow-600/30 font-sans">
-        <UpiQrBlock upiId={seller.upiId} payeeName={seller.tradeName || seller.legalName} grandTotal={summary.grandTotal} invoiceNumber={invoice.invoice.invoiceNumber} />
+      <div className="flex justify-end pt-3 border-t border-yellow-600/30 font-sans">
         <SignatureBlock invoice={invoice} />
       </div>
     </div>

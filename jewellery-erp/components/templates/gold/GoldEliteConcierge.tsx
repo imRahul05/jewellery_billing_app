@@ -5,13 +5,12 @@ import { formatCurrency, formatGrams } from "@/lib/formatters/currency";
 import { TemplateHeader } from "../shared/TemplateHeader";
 import { BuyerDetailsBlock } from "../shared/BuyerDetailsBlock";
 import { TaxSummaryTable } from "../shared/TaxSummaryTable";
-import { UpiQrBlock } from "../shared/UpiQrBlock";
 import { SignatureBlock } from "../shared/SignatureBlock";
 import { cn } from "@/lib/utils";
 import { Crown, Sparkles } from "lucide-react";
 
 export function GoldEliteConcierge({ invoice, isThumbnail = false, className }: TemplateProps) {
-  const { items, summary, billingMode, seller } = invoice;
+  const { items, summary, billingMode } = invoice;
   const isGst = billingMode === "gst";
   const goldItems = items as GoldItem[];
 
@@ -103,10 +102,7 @@ export function GoldEliteConcierge({ invoice, isThumbnail = false, className }: 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-amber-600/40">
-        <div className="bg-white p-2 rounded max-w-[200px]">
-          <UpiQrBlock upiId={seller.upiId} payeeName={seller.tradeName || seller.legalName} grandTotal={summary.grandTotal} invoiceNumber={invoice.invoice.invoiceNumber} className="p-0 border-none bg-transparent" />
-        </div>
+      <div className="flex justify-end pt-3 border-t border-amber-600/40">
         <SignatureBlock invoice={invoice} />
       </div>
     </div>

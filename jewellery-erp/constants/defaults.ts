@@ -67,7 +67,7 @@ export const DEFAULT_OTHER_DETAILS: InvoiceOtherDetails = {
   roundOff: true,
   declaration: "Certified that the particulars given above are true and correct and the amount indicated represents the price actually charged. Gold purity certified under Bureau of Indian Standards (BIS) Hallmarking scheme.",
   customFooterNote: "Thank you for choosing Shree Krishna Jewellers. Visit again!",
-  showUpiQr: true,
+  showUpiQr: false,
   showBankDetails: true,
   showSignature: true,
 };

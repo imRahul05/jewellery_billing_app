@@ -2,7 +2,6 @@ import React from "react";
 import { TemplateProps } from "@/types/template.types";
 import { GoldItem } from "@/types/category.types";
 import { formatCurrency, formatGrams } from "@/lib/formatters/currency";
-import { UpiQrBlock } from "../shared/UpiQrBlock";
 import { cn } from "@/lib/utils";
 
 export function GoldA5LandscapeVoucher({ invoice, isThumbnail = false, className }: TemplateProps) {
@@ -69,13 +68,10 @@ export function GoldA5LandscapeVoucher({ invoice, isThumbnail = false, className
         </table>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 pt-1 border-t border-amber-300 text-xs items-center">
+      <div className="grid grid-cols-2 gap-4 pt-1 border-t border-amber-300 text-xs items-center">
         <div className="text-[10px] text-neutral-600">
           <p className="font-semibold text-neutral-800">Terms &amp; Hallmark:</p>
           <p>BIS 100% Certified. Purity guaranteed.</p>
-        </div>
-        <div className="flex justify-center">
-          <UpiQrBlock upiId={seller.upiId} payeeName={seller.tradeName || seller.legalName} grandTotal={summary.grandTotal} invoiceNumber={invoice.invoice.invoiceNumber} className="p-1 border-none bg-transparent scale-90" />
         </div>
         <div className="space-y-1 bg-amber-50 p-2 rounded border border-amber-200 text-right text-[11px]">
           <div className="flex justify-between">

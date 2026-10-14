@@ -5,13 +5,12 @@ import { formatCurrency, formatGrams } from "@/lib/formatters/currency";
 import { TemplateHeader } from "../shared/TemplateHeader";
 import { BuyerDetailsBlock } from "../shared/BuyerDetailsBlock";
 import { TaxSummaryTable } from "../shared/TaxSummaryTable";
-import { UpiQrBlock } from "../shared/UpiQrBlock";
 import { SignatureBlock } from "../shared/SignatureBlock";
 import { cn } from "@/lib/utils";
 import { Heart, Sparkles } from "lucide-react";
 
 export function GoldBridalCollection({ invoice, isThumbnail = false, className }: TemplateProps) {
-  const { items, summary, other, billingMode, seller } = invoice;
+  const { items, summary, other, billingMode } = invoice;
   const isGst = billingMode === "gst";
   const goldItems = items as GoldItem[];
 
@@ -78,14 +77,6 @@ export function GoldBridalCollection({ invoice, isThumbnail = false, className }
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-3">
         <div>
           {isGst && <TaxSummaryTable summary={summary} />}
-          {other.showUpiQr && seller.upiId && (
-            <UpiQrBlock
-              upiId={seller.upiId}
-              payeeName={seller.tradeName || seller.legalName}
-              grandTotal={summary.grandTotal}
-              invoiceNumber={invoice.invoice.invoiceNumber}
-            />
-          )}
         </div>
 
         <div className="space-y-1.5 text-xs bg-rose-50/40 p-3.5 rounded border border-rose-200">

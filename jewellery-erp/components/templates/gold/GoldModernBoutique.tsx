@@ -4,7 +4,6 @@ import { GoldItem } from "@/types/category.types";
 import { formatCurrency, formatGrams } from "@/lib/formatters/currency";
 import { BuyerDetailsBlock } from "../shared/BuyerDetailsBlock";
 import { TaxSummaryTable } from "../shared/TaxSummaryTable";
-import { UpiQrBlock } from "../shared/UpiQrBlock";
 import { SignatureBlock } from "../shared/SignatureBlock";
 import { cn } from "@/lib/utils";
 
@@ -80,14 +79,6 @@ export function GoldModernBoutique({ invoice, isThumbnail = false, className }: 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-4">
         <div>
           {isGst && <TaxSummaryTable summary={summary} />}
-          {other.showUpiQr && seller.upiId && (
-            <UpiQrBlock
-              upiId={seller.upiId}
-              payeeName={seller.tradeName || seller.legalName}
-              grandTotal={summary.grandTotal}
-              invoiceNumber={invoice.invoice.invoiceNumber}
-            />
-          )}
         </div>
 
         <div className="space-y-2 text-xs bg-neutral-50 p-4 rounded-xl border border-neutral-100">
