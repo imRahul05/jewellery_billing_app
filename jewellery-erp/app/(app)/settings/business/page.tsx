@@ -25,6 +25,11 @@ const BusinessSettingsSchema = z.object({
   pan: z.string().length(10, "PAN must be 10 characters").or(z.literal("")).nullable(),
   contactEmail: z.string().email("Invalid email").or(z.literal("")).nullable(),
   contactPhone: z.string().min(10, "Phone must be at least 10 digits").or(z.literal("")).nullable(),
+  addressStreet: z.string().optional().nullable(),
+  addressCity: z.string().optional().nullable(),
+  addressState: z.string().optional().nullable(),
+  addressPostalCode: z.string().optional().nullable(),
+  addressCountry: z.string().default("India").optional().nullable(),
   baseCurrency: z.string().length(3),
   defaultGstRate: z.coerce.number().nonnegative("GST rate must be non-negative"),
   gstRegistered: z.coerce.boolean(),
@@ -34,6 +39,7 @@ const BusinessSettingsSchema = z.object({
   invoiceNextSeq: z.coerce.string().min(1, "Next sequence is required"),
   financialYearStartMonth: z.coerce.number().int().min(1).max(12),
   defaultTemplateId: z.string().nullable().optional(),
+  defaultPaymentMode: z.enum(["cash", "upi", "card", "split", "due"]).default("cash"),
 });
 
 type BusinessSettingsFormValues = z.infer<typeof BusinessSettingsSchema>;
@@ -72,12 +78,18 @@ export default function BusinessSettingsPage() {
   // Reset form when settings load
   React.useEffect(() => {
     if (settings) {
+      const addr = settings.address || (typeof settings.addressJson === "object" && settings.addressJson !== null ? (settings.addressJson as Record<string, string>) : null);
       reset({
         name: settings.name,
         gstin: settings.gstin || "",
         pan: settings.pan || "",
         contactEmail: settings.contactEmail || "",
         contactPhone: settings.contactPhone || "",
+        addressStreet: addr?.street || "",
+        addressCity: addr?.city || "",
+        addressState: addr?.state || "",
+        addressPostalCode: addr?.postalCode || "",
+        addressCountry: addr?.country || "India",
         baseCurrency: settings.baseCurrency,
         defaultGstRate: Number(settings.defaultGstRate),
         gstRegistered: settings.gstRegistered,
@@ -87,6 +99,7 @@ export default function BusinessSettingsPage() {
         invoiceNextSeq: settings.invoiceNextSeq,
         financialYearStartMonth: settings.financialYearStartMonth,
         defaultTemplateId: settings.defaultTemplateId || "classic",
+        defaultPaymentMode: settings.defaultPaymentMode || "cash",
       });
     }
   }, [settings, reset]);
@@ -111,6 +124,16 @@ export default function BusinessSettingsPage() {
   const selectedTemplate = useWatch({ control, name: "defaultTemplateId" }) || "classic";
 
   const onSettingsSubmit = (values: BusinessSettingsFormValues) => {
+    const addressPayload = values.addressStreet || values.addressCity
+      ? {
+          street: values.addressStreet || "",
+          city: values.addressCity || "",
+          state: values.addressState || "",
+          postalCode: values.addressPostalCode || "",
+          country: values.addressCountry || "India",
+        }
+      : null;
+
     updateSettings(
       {
         ...values,
@@ -119,6 +142,8 @@ export default function BusinessSettingsPage() {
         contactEmail: values.contactEmail || null,
         contactPhone: values.contactPhone || null,
         defaultTemplateId: values.defaultTemplateId || "classic",
+        address: addressPayload,
+        defaultPaymentMode: values.defaultPaymentMode,
       },
       {
         onSuccess: () => {
@@ -222,6 +247,41 @@ export default function BusinessSettingsPage() {
                     <Input id="contactPhone" placeholder="9876543210" {...register("contactPhone")} />
                     {errors.contactPhone && <p className="text-xs text-destructive">{errors.contactPhone.message}</p>}
                   </div>
+
+                  <div className="pt-3 border-t space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">Store Address (Invoices & Billing)</Label>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="addressStreet">Street Address</Label>
+                      <Input id="addressStreet" placeholder="e.g. Shop No. 12, Zaveri Bazaar" {...register("addressStreet")} />
+                      {errors.addressStreet && <p className="text-xs text-destructive">{errors.addressStreet.message}</p>}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="addressCity">City</Label>
+                        <Input id="addressCity" placeholder="Mumbai" {...register("addressCity")} />
+                        {errors.addressCity && <p className="text-xs text-destructive">{errors.addressCity.message}</p>}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="addressState">State</Label>
+                        <Input id="addressState" placeholder="Maharashtra" {...register("addressState")} />
+                        {errors.addressState && <p className="text-xs text-destructive">{errors.addressState.message}</p>}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="addressPostalCode">PIN / Postal Code</Label>
+                        <Input id="addressPostalCode" placeholder="400002" {...register("addressPostalCode")} />
+                        {errors.addressPostalCode && <p className="text-xs text-destructive">{errors.addressPostalCode.message}</p>}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="addressCountry">Country</Label>
+                        <Input id="addressCountry" placeholder="India" {...register("addressCountry")} />
+                        {errors.addressCountry && <p className="text-xs text-destructive">{errors.addressCountry.message}</p>}
+                      </div>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -259,6 +319,16 @@ export default function BusinessSettingsPage() {
                       </Select>
                       {errors.financialYearStartMonth && <p className="text-xs text-destructive">{errors.financialYearStartMonth.message}</p>}
                     </div>
+                  </div>
+                  <div className="space-y-1.5 pt-2 border-t">
+                    <Select label="Default Counter Payment Mode" {...register("defaultPaymentMode")}>
+                      <option value="cash">Cash (Full Settlement)</option>
+                      <option value="upi">Online / UPI (Full Settlement)</option>
+                      <option value="card">Card / POS Machine</option>
+                      <option value="split">Split (Part Cash, Part Online)</option>
+                      <option value="due">Credit / Due (Pay Later)</option>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">Pre-selects this payment mode when staff creates a new bill.</p>
                   </div>
                 </CardContent>
               </Card>

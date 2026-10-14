@@ -66,6 +66,18 @@ export interface ReturnInvoiceInput {
   }>;
 }
 
+export interface InitialPaymentInput {
+  amount: string | number;
+  method: "cash" | "card" | "upi" | "bank_transfer" | "cheque" | "store_credit" | "gold_exchange";
+  referenceNo?: string | null;
+  notes?: string | null;
+}
+
+export interface FinalizeInvoiceInput {
+  initialPayments?: InitialPaymentInput[];
+  dueDate?: string | Date | null;
+}
+
 export const invoiceApi = {
   getInvoices: (params?: { customerId?: string; status?: string; type?: string; limit?: number; offset?: number }) =>
     api.get<SerializedInvoice[]>("/invoices", params),
@@ -77,8 +89,8 @@ export const invoiceApi = {
     api.put<SerializedInvoice>(`/invoices/${id}`, data),
   deleteInvoice: (id: string) =>
     api.delete<void>(`/invoices/${id}`),
-  finalizeInvoice: (id: string) =>
-    api.post<SerializedInvoice>(`/invoices/${id}/finalize`),
+  finalizeInvoice: (id: string, data?: FinalizeInvoiceInput) =>
+    api.post<SerializedInvoice>(`/invoices/${id}/finalize`, data ?? {}),
   cancelInvoice: (id: string, reason: string) =>
     api.post<SerializedInvoice>(`/invoices/${id}/cancel`, { reason }),
   createPayment: (id: string, data: PaymentCreateInput) =>

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Eye, FileText, LayoutGrid } from "lucide-react";
+import { Eye, LayoutGrid } from "lucide-react";
 import { toIndianWords } from "@/lib/billing/indian-words";
 import { Prisma } from "@prisma/client";
 
@@ -51,6 +51,7 @@ export interface PreviewInvoice {
     amount: string | number;
     exchangeMetalWeight?: string | number | null;
     exchangeMetalValue?: string | number | null;
+    referenceNo?: string | null;
   }>;
 }
 
@@ -106,6 +107,7 @@ export function InvoicePreviewDialog({
 
   const hasDiscount = invoice.lineItems?.some((line) => Number(line.discount) > 0) ?? false;
   const goldExchangePayments = invoice.payments?.filter((p) => p.method === "gold_exchange") || [];
+  const nonGoldPayments = invoice.payments?.filter((p) => p.method !== "gold_exchange") || [];
   const hasGoldExchange = goldExchangePayments.length > 0;
   const grossInvoiceValue =
     Number(invoice.subtotal) +
@@ -400,6 +402,30 @@ export function InvoicePreviewDialog({
                   <span>{hasGoldExchange ? "Net Payable:" : "Grand Total:"}</span>
                   <span>₹{Number(invoice.grandTotal).toFixed(2)}</span>
                 </div>
+
+                {nonGoldPayments.length > 0 && (
+                  <div className="space-y-1 border-t pt-1.5 border-slate-200">
+                    {nonGoldPayments.map((p, idx) => (
+                      <div key={p.id || idx} className="flex justify-between text-emerald-700 dark:text-emerald-400 font-medium text-[11px]">
+                        <span>Paid ({p.method.toUpperCase()}{p.referenceNo ? ` - ${p.referenceNo}` : ""}):</span>
+                        <span>₹{Number(p.amount).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className={`flex justify-between border-t pt-1.5 text-xs font-bold ${
+                  Number(invoice.balanceDue || 0) > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
+                }`}>
+                  <span>Balance Due:</span>
+                  <span>₹{Number(invoice.balanceDue || 0).toFixed(2)}</span>
+                </div>
+                {invoice.dueDate && Number(invoice.balanceDue || 0) > 0 && (
+                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <span>Due Date:</span>
+                    <span>{invoice.dueDate}</span>
+                  </div>
+                )}
               </div>
             </div>
 

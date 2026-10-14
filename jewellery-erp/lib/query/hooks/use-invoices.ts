@@ -49,11 +49,14 @@ export function useFinalizeInvoice(tenantId: string) {
   const queryClient = useQueryClient();
   const router = useRouter();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const res = await invoiceApi.finalizeInvoice(id);
+    mutationFn: async (payload: string | { id: string; data?: import("@/lib/api/invoices.api").FinalizeInvoiceInput }) => {
+      const id = typeof payload === "string" ? payload : payload.id;
+      const data = typeof payload === "string" ? undefined : payload.data;
+      const res = await invoiceApi.finalizeInvoice(id, data);
       return res.data;
     },
-    onSuccess: (_, id) => {
+    onSuccess: (_, payload) => {
+      const id = typeof payload === "string" ? payload : payload.id;
       queryClient.invalidateQueries({ queryKey: qk.invoices.detail(tenantId, id) });
       queryClient.invalidateQueries({ queryKey: qk.invoices.all(tenantId) });
       router.refresh();

@@ -16,12 +16,29 @@ import { useMetalRates } from "@/lib/query/hooks/use-metal-rates";
 import { useCreateInvoice, useFinalizeInvoice } from "@/lib/query/hooks/use-invoices";
 import { useBusinessSettings } from "@/lib/query/hooks/use-business-settings";
 import { useTenantStore } from "@/lib/stores/tenant-store";
-import { InvoiceCreateInput, LineItemInput, OldGoldExchangeInput } from "@/lib/api/invoices.api";
+import { InvoiceCreateInput, LineItemInput, OldGoldExchangeInput, InitialPaymentInput } from "@/lib/api/invoices.api";
+import { formatAddress } from "@/lib/api/business.api";
 import { calculateInvoice } from "@/lib/billing/calculator";
 import { InvoicePreviewDialog } from "@/components/billing/invoice-preview-dialog";
 import { Prisma } from "@prisma/client";
 
-import { ChevronRight, ChevronLeft, Plus, Trash2, Calculator, ShoppingBag, Eye, Loader2 } from "lucide-react";
+import {
+  ChevronRight,
+  ChevronLeft,
+  Plus,
+  Trash2,
+  Calculator,
+  ShoppingBag,
+  Eye,
+  Loader2,
+  Banknote,
+  CreditCard,
+  Smartphone,
+  Split,
+  Calendar,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
 
 export default function InvoiceBuilderPage(): React.JSX.Element {
   const router = useRouter();
@@ -47,9 +64,9 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
   // Preview dialog state
   const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
 
-  // Step 1 Form Data
+  // Step 1 Form Data (Mandatory Customer Details)
   const [customerId, setCustomerId] = useState<string>("");
-  const [customerMode, setCustomerMode] = useState<"walk_in" | "existing" | "new">("walk_in");
+  const [customerMode, setCustomerMode] = useState<"existing" | "new">("existing");
   const [custSearch, setCustSearch] = useState<string>("");
   const [custDropdownOpen, setCustDropdownOpen] = useState<boolean>(false);
   const [newCustName, setNewCustName] = useState<string>("");
@@ -57,6 +74,17 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
   const [newCustEmail, setNewCustEmail] = useState<string>("");
   const [newCustGstin, setNewCustGstin] = useState<string>("");
   const [newCustAddress, setNewCustAddress] = useState<string>("");
+
+  // Step 4 Form Data (Payment Settlement)
+  const [userSelectedPaymentMode, setUserSelectedPaymentMode] = useState<"cash" | "upi" | "card" | "split" | "due" | null>(null);
+  const paymentMode = userSelectedPaymentMode ?? (settings?.defaultPaymentMode || "cash");
+  const [cashAmount, setCashAmount] = useState<string>("");
+  const [cashTendered, setCashTendered] = useState<string>("");
+  const [digitalAmount, setDigitalAmount] = useState<string>("");
+  const [userSelectedDigitalMethod, setUserSelectedDigitalMethod] = useState<"upi" | "card" | "bank_transfer" | null>(null);
+  const digitalMethod = userSelectedDigitalMethod ?? (paymentMode === "card" ? "card" : "upi");
+  const [digitalRef, setDigitalRef] = useState<string>("");
+  const [settlementDueDate, setSettlementDueDate] = useState<string>("");
 
   const dropdownRef = React.useRef<HTMLDivElement>(null);
 
@@ -81,7 +109,6 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
   }, [customers, custSearch]);
 
   const [invoiceDate, setInvoiceDate] = useState<string>(new Date().toISOString().split("T")[0]);
-  const [dueDate] = useState<string>("");
   const [invoiceType, setInvoiceType] = useState<string>("sales");
   const [placeOfSupply, setPlaceOfSupply] = useState<string>("27"); // MH default
   const [notes, setNotes] = useState<string>("");
@@ -192,6 +219,138 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
     setLines(lines.filter((_, i) => i !== idx));
   };
 
+  // Calculation and Settlement Helpers
+  const currentInvoiceCalculation = React.useMemo(() => {
+    if (lines.length === 0) return null;
+    const sellerStateCode = settings?.gstin ? settings.gstin.substring(0, 2) : "27";
+    const linesForCalc = lines.map((line) => ({
+      productId: line.productId,
+      inventoryItemId: line.inventoryItemId,
+      hsnCodeId: line.hsnCodeId,
+      description: line.description,
+      materialType: line.materialType,
+      karat: line.karat,
+      quantity: line.quantity ?? 1,
+      grossWeight: Number(line.grossWeight),
+      stoneWeight: Number(line.stoneWeight),
+      purity: Number(line.purity),
+      metalRatePerGram: Number(line.metalRatePerGram),
+      makingChargeType: line.makingChargeType,
+      makingChargeValue: Number(line.makingChargeValue),
+      wastageType: line.wastageType,
+      wastageValue: Number(line.wastageValue),
+      stoneChargeType: line.stoneChargeType,
+      stoneCarat: Number(line.stoneCarat ?? 0),
+      stonePieces: Number(line.stonePieces ?? 0),
+      stoneRate: Number(line.stoneRate ?? 0),
+      hallmarkCharges: Number(line.hallmarkCharges ?? 0),
+      otherCharges: Number(line.otherCharges ?? 0),
+      lineDiscountType: line.lineDiscountType,
+      lineDiscountValue: Number(line.lineDiscountValue ?? 0),
+      gstRatePercent: Number(line.gstRatePercent ?? settings?.defaultGstRate ?? 3.0),
+      sellerStateCode,
+      placeOfSupplyStateCode: placeOfSupply,
+    }));
+
+    let oldGoldVal = 0;
+    if (includeOldGold && oldGoldWeight && oldGoldPurityRate) {
+      const netWeight = parseFloat(oldGoldWeight);
+      const purityRate = parseFloat(oldGoldPurityRate);
+      const deductionPercent = parseFloat(oldGoldDeduction || "0");
+      const multiplier = 1 - deductionPercent / 100;
+      oldGoldVal = netWeight * purityRate * multiplier;
+    }
+
+    try {
+      return calculateInvoice(
+        linesForCalc,
+        invoiceDiscountType,
+        parseFloat(invoiceDiscountValue || "0"),
+        oldGoldVal
+      );
+    } catch {
+      return null;
+    }
+  }, [
+    lines,
+    settings,
+    placeOfSupply,
+    includeOldGold,
+    oldGoldWeight,
+    oldGoldPurityRate,
+    oldGoldDeduction,
+    invoiceDiscountType,
+    invoiceDiscountValue,
+  ]);
+
+  const netPayableNumber = currentInvoiceCalculation ? Number(currentInvoiceCalculation.grandTotal) : 0;
+  const parsedCash = parseFloat(cashAmount || "0");
+  const parsedDigital = parseFloat(digitalAmount || "0");
+  const validCash = isNaN(parsedCash) ? 0 : parsedCash;
+  const validDigital = isNaN(parsedDigital) ? 0 : parsedDigital;
+  const totalPaid = validCash + validDigital;
+  const balanceDue = Math.max(0, netPayableNumber - totalPaid);
+
+  const handlePaymentModeSelect = (mode: "cash" | "upi" | "card" | "split" | "due"): void => {
+    setUserSelectedPaymentMode(mode);
+    if (mode === "cash") {
+      setCashAmount(netPayableNumber > 0 ? netPayableNumber.toFixed(2) : "");
+      setDigitalAmount("0");
+    } else if (mode === "upi") {
+      setCashAmount("0");
+      setDigitalAmount(netPayableNumber > 0 ? netPayableNumber.toFixed(2) : "");
+      setUserSelectedDigitalMethod("upi");
+    } else if (mode === "card") {
+      setCashAmount("0");
+      setDigitalAmount(netPayableNumber > 0 ? netPayableNumber.toFixed(2) : "");
+      setUserSelectedDigitalMethod("card");
+    } else if (mode === "split") {
+      const half = netPayableNumber > 0 ? (netPayableNumber / 2).toFixed(2) : "";
+      setCashAmount(half);
+      setDigitalAmount(netPayableNumber > 0 ? (netPayableNumber - Number(half)).toFixed(2) : "");
+    } else if (mode === "due") {
+      setCashAmount("0");
+      setDigitalAmount("0");
+    }
+  };
+
+  const handleNext = (): void => {
+    if (step === 1) {
+      if (customerMode === "existing" && !customerId) {
+        toast.error("Please select an existing customer before proceeding.");
+        return;
+      }
+      if (customerMode === "new") {
+        if (!newCustName.trim()) {
+          toast.error("Please enter the customer's full name.");
+          return;
+        }
+        const cleanPhone = newCustPhone.trim().replace(/\D/g, "");
+        if (!cleanPhone || cleanPhone.length < 10) {
+          toast.error("Please enter a valid customer phone number (minimum 10 digits).");
+          return;
+        }
+      }
+      setStep(2);
+      return;
+    }
+    if (step === 2) {
+      if (lines.length === 0) {
+        toast.error("Please add at least one line item to the invoice.");
+        return;
+      }
+      setStep(3);
+      return;
+    }
+    if (step === 3) {
+      if (!cashAmount && !digitalAmount && netPayableNumber > 0) {
+        handlePaymentModeSelect(paymentMode);
+      }
+      setStep(4);
+      return;
+    }
+  };
+
   // Submit Draft or Final Invoice
   const handleSaveInvoice = async (finalize: boolean): Promise<void> => {
     if (lines.length === 0) {
@@ -204,9 +363,16 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
       return;
     }
 
-    if (customerMode === "new" && !newCustName.trim()) {
-      toast.error("Please enter a customer name for the new customer.");
-      return;
+    if (customerMode === "new") {
+      if (!newCustName.trim()) {
+        toast.error("Please enter the customer's full name.");
+        return;
+      }
+      const cleanPhone = newCustPhone.trim().replace(/\D/g, "");
+      if (!cleanPhone || cleanPhone.length < 10) {
+        toast.error("Please enter a valid customer phone number (minimum 10 digits).");
+        return;
+      }
     }
 
     try {
@@ -216,13 +382,13 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
       if (customerMode === "existing") {
         resolvedCustomerId = customerId;
       } else if (customerMode === "new") {
-        toast.info("Registering new customer...");
+        toast.info("Registering customer...");
         const newCust = await createCustomer({
-          name: newCustName,
-          phone: newCustPhone || undefined,
-          email: newCustEmail || undefined,
-          gstin: newCustGstin || undefined,
-          addressJson: newCustAddress ? { street: newCustAddress } : undefined,
+          name: newCustName.trim(),
+          phone: newCustPhone.trim(),
+          email: newCustEmail.trim() || undefined,
+          gstin: newCustGstin.trim() || undefined,
+          addressJson: newCustAddress.trim() ? { street: newCustAddress.trim() } : undefined,
         });
         resolvedCustomerId = newCust.id;
       }
@@ -238,7 +404,7 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
       const payload: InvoiceCreateInput = {
         customerId: resolvedCustomerId,
         invoiceDate: new Date(invoiceDate),
-        dueDate: dueDate ? new Date(dueDate) : null,
+        dueDate: balanceDue > 0 && settlementDueDate ? new Date(settlementDueDate) : null,
         type: invoiceType as "sales" | "purchase" | "quotation" | "estimate" | "return" | "exchange" | "repair",
         placeOfSupply,
         invoiceDiscountType,
@@ -251,8 +417,29 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
       const createdInvoice = await createInvoice(payload);
 
       if (finalize) {
-        toast.info("Finalizing invoice...");
-        await finalizeInvoice(createdInvoice.id);
+        toast.info("Finalizing invoice & allocating stock...");
+        const initialPayments: InitialPaymentInput[] = [];
+        if (validCash > 0) {
+          initialPayments.push({
+            amount: validCash,
+            method: "cash",
+          });
+        }
+        if (validDigital > 0) {
+          initialPayments.push({
+            amount: validDigital,
+            method: digitalMethod,
+            referenceNo: digitalRef.trim() || undefined,
+          });
+        }
+
+        await finalizeInvoice({
+          id: createdInvoice.id,
+          data: {
+            initialPayments: initialPayments.length > 0 ? initialPayments : undefined,
+            dueDate: balanceDue > 0 && settlementDueDate ? settlementDueDate : undefined,
+          },
+        });
         toast.success("Invoice finalized and stock updated!");
         // Automatically open PDF in a new tab
         window.open(`/api/v1/invoices/${createdInvoice.id}/pdf?stream=true`, "_blank");
@@ -344,48 +531,72 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
 
       const resolvedCustomerName = customerMode === "existing"
         ? (customers.find(c => c.id === customerId)?.name || "Existing Customer")
-        : customerMode === "new"
-        ? newCustName
-        : "Walk-in Customer";
+        : newCustName.trim() || "Customer";
 
       const resolvedCustomerPhone = customerMode === "existing"
         ? (customers.find(c => c.id === customerId)?.phone || null)
-        : customerMode === "new"
-        ? newCustPhone
-        : null;
+        : newCustPhone.trim() || null;
 
       const resolvedCustomerEmail = customerMode === "existing"
         ? (customers.find(c => c.id === customerId)?.email || null)
-        : customerMode === "new"
-        ? newCustEmail
-        : null;
+        : newCustEmail.trim() || null;
 
       const resolvedCustomerGstin = customerMode === "existing"
         ? (customers.find(c => c.id === customerId)?.gstin || null)
-        : customerMode === "new"
-        ? newCustGstin
-        : null;
+        : newCustGstin.trim() || null;
 
       const resolvedCustomerAddress = customerMode === "existing"
         ? (customers.find(c => c.id === customerId)?.addressJson || null)
-        : customerMode === "new"
-        ? (newCustAddress ? { street: newCustAddress } : null)
-        : null;
+        : (newCustAddress.trim() ? { street: newCustAddress.trim() } : null);
 
-      const customerDetails = resolvedCustomerName !== "Walk-in Customer" ? {
+      const customerDetails = {
         name: resolvedCustomerName,
         phone: resolvedCustomerPhone,
         email: resolvedCustomerEmail,
         gstin: resolvedCustomerGstin,
         addressJson: resolvedCustomerAddress as PreviewCustomer["addressJson"],
-      } : null;
+      };
+
+      const simPayments: Array<{
+        id?: string;
+        method: string;
+        amount: string;
+        exchangeMetalWeight?: string | null;
+        exchangeMetalValue?: string | null;
+        referenceNo?: string | null;
+      }> = [];
+
+      if (includeOldGold && oldGoldWeight && oldGoldPurityRate) {
+        simPayments.push({
+          method: "gold_exchange",
+          amount: oldGoldVal.toString(),
+          exchangeMetalWeight: oldGoldWeight,
+          exchangeMetalValue: oldGoldVal.toString(),
+        });
+      }
+
+      if (validCash > 0) {
+        simPayments.push({
+          method: "cash",
+          amount: validCash.toFixed(2),
+        });
+      }
+
+      if (validDigital > 0) {
+        simPayments.push({
+          method: digitalMethod,
+          amount: validDigital.toFixed(2),
+          referenceNo: digitalRef.trim() || null,
+        });
+      }
 
       return {
         invoice: {
           invoiceNumber: "DRAFT-PREVIEW",
           invoiceDate: invoiceDate,
+          dueDate: balanceDue > 0 && settlementDueDate ? settlementDueDate : undefined,
           type: invoiceType,
-          status: "draft",
+          status: totalPaid >= Number(calcResult.grandTotal) ? "paid" : totalPaid > 0 ? "partially_paid" : "issued",
           placeOfSupply: placeOfSupply,
           subtotal: calcResult.subTotalTaxable.toString(),
           makingChargesTotal: calcResult.lines.reduce((sum, l) => sum.add(l.makingCharges), new Prisma.Decimal(0)).toString(),
@@ -395,18 +606,11 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
           igstTotal: calcResult.totalIgst.toString(),
           roundOff: calcResult.roundOff.toString(),
           grandTotal: calcResult.grandTotal.toString(),
-          amountPaid: "0",
-          balanceDue: calcResult.grandTotal.toString(),
+          amountPaid: totalPaid.toFixed(2),
+          balanceDue: balanceDue.toFixed(2),
           notes: notes,
           lineItems: previewLines,
-          payments: includeOldGold && oldGoldWeight && oldGoldPurityRate ? [
-            {
-              method: "gold_exchange",
-              amount: oldGoldVal.toString(),
-              exchangeMetalWeight: oldGoldWeight,
-              exchangeMetalValue: oldGoldVal.toString(),
-            }
-          ] : [],
+          payments: simPayments,
         },
         customer: customerDetails,
       };
@@ -436,6 +640,13 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
     invoiceDate,
     invoiceType,
     notes,
+    validCash,
+    validDigital,
+    digitalMethod,
+    digitalRef,
+    totalPaid,
+    balanceDue,
+    settlementDueDate,
   ]);
 
   interface PreviewCustomer {
@@ -457,7 +668,16 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Create Invoice</h1>
-          <p className="text-muted-foreground">Step {step} of 3: {step === 1 ? "Billing Details" : step === 2 ? "Add Line Items" : "Review & Issue"}</p>
+          <p className="text-muted-foreground">
+            Step {step} of 4:{" "}
+            {step === 1
+              ? "Customer & Billing"
+              : step === 2
+              ? "Add Line Items"
+              : step === 3
+              ? "Discounts & Old Gold"
+              : "Payment & Settlement"}
+          </p>
         </div>
         <div className="flex gap-2">
           {step > 1 && (
@@ -465,8 +685,8 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
               <ChevronLeft className="mr-2 h-4 w-4" /> Back
             </Button>
           )}
-          {step < 3 ? (
-            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium" onClick={() => setStep(step + 1)}>
+          {step < 4 ? (
+            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium" onClick={handleNext}>
               Next <ChevronRight className="ml-2 h-4 w-4" />
             </Button>
           ) : (
@@ -495,22 +715,11 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
           <CardContent className="space-y-6">
             {/* Customer Selector Mode Tabs */}
             <div className="space-y-2">
-              <Label>Customer Selection Mode</Label>
-              <div className="grid grid-cols-3 gap-2 p-1 bg-muted rounded-lg max-w-md">
-                <button
-                  type="button"
-                  className={`py-1.5 text-xs font-semibold rounded-md transition-all ${
-                    customerMode === "walk_in"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                  onClick={() => {
-                    setCustomerMode("walk_in");
-                    setCustomerId("");
-                  }}
-                >
-                  Walk-in Customer
-                </button>
+              <div className="flex items-center justify-between">
+                <Label>Customer Identification <span className="text-destructive">*</span></Label>
+                <span className="text-xs text-muted-foreground">Every invoice requires customer name & phone</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-lg max-w-md">
                 <button
                   type="button"
                   className={`py-1.5 text-xs font-semibold rounded-md transition-all ${
@@ -538,21 +747,14 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
                     setCustomerId("");
                   }}
                 >
-                  New Customer
+                  New Customer / Walk-in
                 </button>
               </div>
             </div>
 
-            {/* Conditional Customer Inputs */}
-            {customerMode === "walk_in" && (
-              <div className="p-4 border border-dashed rounded-lg bg-muted/20 text-xs text-muted-foreground">
-                Selected: <strong className="text-foreground">Walk-in Customer</strong>. No customer profile will be created or linked.
-              </div>
-            )}
-
             {customerMode === "existing" && (
               <div className="space-y-2 relative" ref={dropdownRef}>
-                <Label htmlFor="cust-search">Search Existing Customer</Label>
+                <Label htmlFor="cust-search">Search Existing Customer <span className="text-destructive">*</span></Label>
                 <div className="flex gap-2">
                   <Input
                     id="cust-search"
@@ -605,7 +807,9 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
 
             {customerMode === "new" && (
               <div className="border p-4 rounded-lg bg-muted/10 space-y-4">
-                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">New Customer Registration</div>
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Customer Details (Name & Phone Mandatory)
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="new-name">Full Name <span className="text-destructive">*</span></Label>
@@ -617,7 +821,7 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="new-phone">Phone Number</Label>
+                    <Label htmlFor="new-phone">Phone Number (10 digits) <span className="text-destructive">*</span></Label>
                     <Input
                       id="new-phone"
                       placeholder="e.g. 9876543210"
@@ -993,19 +1197,245 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
         </div>
       )}
 
+      {/* Step 4: Payment & Settlement */}
+      {step === 4 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="md:col-span-2 space-y-6">
+            {/* Mode of Payment */}
+            <Card className="shadow-lg border-primary/20">
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <CreditCard className="h-5 w-5 text-indigo-600" />
+                      Select Payment Mode
+                    </CardTitle>
+                    <CardDescription>
+                      Choose how the customer is settling this invoice.
+                    </CardDescription>
+                  </div>
+                  {/* Status Badge */}
+                  <div>
+                    {totalPaid >= netPayableNumber && netPayableNumber > 0 ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> PAID IN FULL
+                      </span>
+                    ) : totalPaid > 0 ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                        <AlertCircle className="h-3.5 w-3.5" /> PARTIALLY PAID
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                        <Calendar className="h-3.5 w-3.5" /> DUE / UNPAID
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Mode Selector Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                  {[
+                    { id: "cash", label: "Cash", desc: "100% Cash", icon: Banknote },
+                    { id: "upi", label: "UPI / QR", desc: "GPay/PhonePe", icon: Smartphone },
+                    { id: "card", label: "Card", desc: "Debit / Credit", icon: CreditCard },
+                    { id: "split", label: "Split", desc: "Cash + Digital", icon: Split },
+                    { id: "due", label: "Pay Later", desc: "Credit / Due", icon: Calendar },
+                  ].map((m) => {
+                    const Icon = m.icon;
+                    const isSelected = paymentMode === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => handlePaymentModeSelect(m.id as "cash" | "upi" | "card" | "split" | "due")}
+                        className={`flex flex-col items-center justify-center p-3 rounded-lg border text-center transition-all ${
+                          isSelected
+                            ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 ring-2 ring-indigo-500/20 font-semibold"
+                            : "border-slate-200 dark:border-slate-800 hover:bg-muted/50 text-slate-600 dark:text-slate-300"
+                        }`}
+                      >
+                        <Icon className={`h-5 w-5 mb-1.5 ${isSelected ? "text-indigo-600 dark:text-indigo-400" : "text-muted-foreground"}`} />
+                        <span className="text-xs">{m.label}</span>
+                        <span className="text-[10px] text-muted-foreground">{m.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Cash Details */}
+                {(paymentMode === "cash" || paymentMode === "split") && (
+                  <div className="border rounded-lg p-4 bg-muted/10 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <Banknote className="h-4 w-4 text-emerald-600" /> Cash Payment
+                      </div>
+                      {paymentMode === "split" && (
+                        <span className="text-[11px] text-muted-foreground">Specify amount received in cash</span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="cash-amount">Cash Amount (₹)</Label>
+                        <Input
+                          id="cash-amount"
+                          type="number"
+                          placeholder="0.00"
+                          value={cashAmount}
+                          onChange={(e) => setCashAmount(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="cash-tendered">Cash Tendered (Change helper)</Label>
+                        <Input
+                          id="cash-tendered"
+                          type="number"
+                          placeholder="Amount given by customer"
+                          value={cashTendered}
+                          onChange={(e) => setCashTendered(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    {Number(cashTendered) > Number(cashAmount) && Number(cashAmount) > 0 && (
+                      <div className="p-2.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 text-xs text-emerald-800 dark:text-emerald-200 flex justify-between font-medium">
+                        <span>Change to Return Customer:</span>
+                        <span className="font-bold">₹{(Number(cashTendered) - Number(cashAmount)).toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Digital / Card / UPI Details */}
+                {(paymentMode === "upi" || paymentMode === "card" || paymentMode === "split") && (
+                  <div className="border rounded-lg p-4 bg-muted/10 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <Smartphone className="h-4 w-4 text-indigo-600" /> Digital / Card Settlement
+                      </div>
+                      <div className="flex gap-2">
+                        {(["upi", "card", "bank_transfer"] as const).map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setUserSelectedDigitalMethod(m)}
+                            className={`px-2 py-0.5 rounded text-[11px] font-medium uppercase border ${
+                              digitalMethod === m
+                                ? "bg-indigo-600 text-white border-indigo-600"
+                                : "bg-background text-muted-foreground hover:bg-muted"
+                            }`}
+                          >
+                            {m === "bank_transfer" ? "Bank" : m}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="digital-amount">Digital Amount (₹)</Label>
+                        <Input
+                          id="digital-amount"
+                          type="number"
+                          placeholder="0.00"
+                          value={digitalAmount}
+                          onChange={(e) => setDigitalAmount(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="digital-ref">Reference / UTR / Approval No.</Label>
+                        <Input
+                          id="digital-ref"
+                          placeholder="e.g. UPI Ref / Approval Code"
+                          value={digitalRef}
+                          onChange={(e) => setDigitalRef(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Balance Due & Due Date Picker */}
+                {balanceDue > 0 && (
+                  <div className="border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between text-amber-800 dark:text-amber-300 text-xs font-bold uppercase tracking-wider">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="h-4 w-4 text-amber-600" /> Balance Due Schedule
+                      </span>
+                      <span>₹{balanceDue.toFixed(2)} Remaining</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="settlement-due-date" className="text-xs">Promise / Due Date for Balance Payment</Label>
+                      <Input
+                        id="settlement-due-date"
+                        type="date"
+                        value={settlementDueDate}
+                        onChange={(e) => setSettlementDueDate(e.target.value)}
+                        className="bg-background max-w-xs"
+                      />
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Quick Payment Settlement Summary */}
+          <div className="md:col-span-1 space-y-6">
+            <Card className="shadow-lg border-indigo-100 bg-indigo-50/20">
+              <CardHeader>
+                <CardTitle className="text-base">Settlement Summary</CardTitle>
+                <CardDescription>Breakdown before bill finalization.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Net Bill Total:</span>
+                  <span className="font-bold text-slate-900 dark:text-white">₹{netPayableNumber.toFixed(2)}</span>
+                </div>
+                {Number(cashAmount) > 0 && (
+                  <div className="flex justify-between text-xs text-emerald-700 dark:text-emerald-400">
+                    <span>Cash Payment:</span>
+                    <span className="font-semibold">₹{Number(cashAmount).toFixed(2)}</span>
+                  </div>
+                )}
+                {Number(digitalAmount) > 0 && (
+                  <div className="flex justify-between text-xs text-indigo-700 dark:text-indigo-400">
+                    <span>{digitalMethod.toUpperCase()} Digital:</span>
+                    <span className="font-semibold">₹{Number(digitalAmount).toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t pt-2 border-slate-200 font-medium">
+                  <span>Total Amount Paid:</span>
+                  <span className="font-semibold text-emerald-600">₹{totalPaid.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between border-t pt-2 border-slate-200">
+                  <span className="font-bold">Balance Due:</span>
+                  <span className={`font-extrabold ${balanceDue > 0 ? "text-amber-600" : "text-emerald-600"}`}>
+                    ₹{balanceDue.toFixed(2)}
+                  </span>
+                </div>
+                {balanceDue > 0 && settlementDueDate && (
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Due Date:</span>
+                    <span>{settlementDueDate}</span>
+                  </div>
+                )}
+
+                <div className="bg-background p-3 rounded-lg border text-xs text-muted-foreground mt-4 space-y-1">
+                  <p className="font-semibold text-foreground">Finalization Note:</p>
+                  <p>Stock will be deducted, invoice numbers locked, and invoice status marked as <strong>{totalPaid >= netPayableNumber && netPayableNumber > 0 ? "PAID" : totalPaid > 0 ? "PARTIALLY PAID" : "ISSUED / DUE"}</strong>.</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
       {computedPreviewInvoice && (
         <InvoicePreviewDialog
           invoice={computedPreviewInvoice.invoice}
           customer={computedPreviewInvoice.customer}
           tenantName={settings?.name || "Jewellery Showroom"}
           tenantGstin={settings?.gstin}
-          tenantAddress={
-            settings?.addressJson
-              ? typeof settings.addressJson === "string"
-                ? settings.addressJson
-                : (settings.addressJson as { street?: string }).street || null
-              : null
-          }
+          tenantAddress={formatAddress(settings?.addressJson)}
           tenantPhone={settings?.contactPhone}
           defaultTemplate={settings?.defaultTemplateId}
           open={isPreviewOpen}

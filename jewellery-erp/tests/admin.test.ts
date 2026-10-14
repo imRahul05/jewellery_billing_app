@@ -162,18 +162,19 @@ describe("Admin Portal Integration Tests", () => {
     });
 
     // Mock fetch for server-to-server Neon Auth signup endpoint
+    const mockUserData = {
+      user: {
+        id: `mock-auth-uid-${Date.now()}`,
+        email: "owner-new@test.com",
+        name: "New Owner",
+      },
+    };
     const mockFetch = vi.fn().mockImplementation(() => {
       return Promise.resolve({
         ok: true,
         status: 200,
-        json: () =>
-          Promise.resolve({
-            user: {
-              id: `mock-auth-uid-${Date.now()}`,
-              email: "owner-new@test.com",
-              name: "New Owner",
-            },
-          }),
+        text: () => Promise.resolve(JSON.stringify(mockUserData)),
+        json: () => Promise.resolve(mockUserData),
       });
     });
     vi.stubGlobal("fetch", mockFetch);

@@ -296,6 +296,7 @@ export const InvoicePdfDocument: React.FC<InvoicePdfProps> = ({
           const colDescStyle = !hasDiscount ? { ...activeStyles.colDescWide } : activeStyles.colDesc;
 
           const goldExchangePayments = invoice.payments?.filter((p) => p.method === "gold_exchange") || [];
+          const nonGoldPayments = invoice.payments?.filter((p) => p.method !== "gold_exchange") || [];
           const hasGoldExchange = goldExchangePayments.length > 0;
           const grossInvoiceValue = parseFloat(invoice.subtotal) + parseFloat(invoice.cgstTotal) + parseFloat(invoice.sgstTotal) + parseFloat(invoice.igstTotal);
 
@@ -412,6 +413,34 @@ export const InvoicePdfDocument: React.FC<InvoicePdfProps> = ({
                     <Text style={{ fontFamily: boldFont }}>{hasGoldExchange ? "Net Payable:" : "Grand Total:"}</Text>
                     <Text style={{ fontFamily: boldFont }}>INR {invoice.grandTotal}</Text>
                   </View>
+
+                  {nonGoldPayments.length > 0 && (
+                    <>
+                      {nonGoldPayments.map((p, idx) => (
+                        <View style={activeStyles.totalRow} key={p.id || idx}>
+                          <Text style={activeStyles.regularText}>
+                            Paid ({p.method.toUpperCase()}{p.referenceNo ? ` - ${p.referenceNo}` : ""}):
+                          </Text>
+                          <Text style={activeStyles.boldText}>INR {parseFloat(p.amount).toFixed(2)}</Text>
+                        </View>
+                      ))}
+                    </>
+                  )}
+
+                  <View style={activeStyles.totalRow}>
+                    <Text style={{ fontFamily: boldFont, color: parseFloat(invoice.balanceDue || "0") > 0 ? "#b45309" : "#166534" }}>
+                      Balance Due:
+                    </Text>
+                    <Text style={{ fontFamily: boldFont, color: parseFloat(invoice.balanceDue || "0") > 0 ? "#b45309" : "#166534" }}>
+                      INR {invoice.balanceDue}
+                    </Text>
+                  </View>
+                  {invoice.dueDate && parseFloat(invoice.balanceDue || "0") > 0 && (
+                    <View style={activeStyles.totalRow}>
+                      <Text style={{ fontSize: 7.5, color: "#64748b" }}>Due Date:</Text>
+                      <Text style={{ fontSize: 7.5, color: "#64748b" }}>{invoice.dueDate}</Text>
+                    </View>
+                  )}
                 </View>
               </View>
             </>
