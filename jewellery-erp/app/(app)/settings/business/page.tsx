@@ -21,7 +21,6 @@ import { MetalType } from "@prisma/client";
 import { TEMPLATES } from "@/constants/templates";
 import { createInitialInvoice } from "@/constants/defaults";
 import { TemplateThumbnail } from "@/components/gallery/template-thumbnail";
-import type { CategoryId } from "@/types/category.types";
 
 const BusinessSettingsSchema = z.object({
   name: z.string().min(1, "Business Name is required"),
@@ -127,28 +126,52 @@ export default function BusinessSettingsPage() {
   const selectedMetalType = useWatch({ control: rateControl, name: "metalType" });
   const selectedTemplate = useWatch({ control, name: "defaultTemplateId" }) || "gold-classic-jewellers";
 
-  type TemplateCategoryFilter = "all" | CategoryId;
-  const [templateCategory, setTemplateCategory] = React.useState<TemplateCategoryFilter>("all");
+  const [templateStyle, setTemplateStyle] = React.useState<string>("all");
   const [templateSearch, setTemplateSearch] = React.useState<string>("");
 
-  const sampleInvoices = React.useMemo(() => ({
-    gold: createInitialInvoice("gold"),
-    silver: createInitialInvoice("silver"),
-    grocery: createInitialInvoice("grocery"),
-    general: createInitialInvoice("general"),
-  }), []);
+  const sampleGoldInvoice = React.useMemo(() => createInitialInvoice("gold"), []);
 
   const filteredTemplates = React.useMemo(() => {
     return TEMPLATES.filter((t) => {
-      const matchesCategory = templateCategory === "all" || t.category === templateCategory;
+      let matchesStyle = true;
+      if (templateStyle === "traditional") {
+        matchesStyle = [
+          "gold-classic-jewellers", "gold-royal-zari", "gold-vintage-ornate",
+          "gold-temple-gold", "gold-heritage-palace", "gold-royal-maratha",
+          "gold-nizam-hyderabad", "gold-bengal-karigari", "gold-bilingual-hindi"
+        ].includes(t.id);
+      } else if (templateStyle === "luxury") {
+        matchesStyle = [
+          "gold-modern-boutique", "gold-minimal-karat", "gold-rose-gold-chic",
+          "gold-art-deco", "gold-sapphire-luxe", "gold-italian-chain",
+          "gold-two-tone-duo", "gold-elite-concierge", "gold-contemporary-linear"
+        ].includes(t.id);
+      } else if (templateStyle === "bridal") {
+        matchesStyle = [
+          "gold-bridal-collection", "gold-diamond-solitaire", "gold-kundan-meenakari",
+          "gold-polki-heritage", "gold-shree-ratna", "gold-festive-diwali",
+          "gold-akshaya-tritiya", "gold-filigree-delicate", "gold-antique-matte",
+          "gold-emerald-crest", "gold-nouveau-curves"
+        ].includes(t.id);
+      } else if (templateStyle === "bullion") {
+        matchesStyle = [
+          "gold-hallmark-ledger", "gold-bullion-simple", "gold-corporate-wholesale",
+          "gold-pure-999", "gold-sovereign-vault", "gold-premium-signature",
+          "gold-artisan-workshop"
+        ].includes(t.id);
+      } else if (templateStyle === "thermal") {
+        matchesStyle = t.isThermal || ["gold-compact-counter", "gold-a5-voucher"].includes(t.id);
+      }
+
       const matchesSearch =
         templateSearch.trim() === "" ||
         t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
         t.description.toLowerCase().includes(templateSearch.toLowerCase()) ||
-        t.paperSize.toLowerCase().includes(templateSearch.toLowerCase());
-      return matchesCategory && matchesSearch;
+        t.paperSize.toLowerCase().includes(templateSearch.toLowerCase()) ||
+        (t.badge && t.badge.toLowerCase().includes(templateSearch.toLowerCase()));
+      return matchesStyle && matchesSearch;
     });
-  }, [templateCategory, templateSearch]);
+  }, [templateStyle, templateSearch]);
 
   const onSettingsSubmit = (values: BusinessSettingsFormValues) => {
     const addressPayload = values.addressStreet || values.addressCity
@@ -399,23 +422,23 @@ export default function BusinessSettingsPage() {
                 </CardContent>
               </Card>
 
-              {/* Invoice Layout Templates Gallery (40 Designs) */}
+              {/* Invoice Layout Templates Gallery (40 Gold Designs) */}
               <Card className="shadow-sm border md:col-span-2">
                 <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b">
                   <div>
                     <CardTitle className="text-lg font-bold flex items-center gap-2">
                       <LayoutGrid className="size-5 text-primary" />
-                      Invoice Template Gallery ({TEMPLATES.length} Designs)
+                      Gold Jewellery Invoice Templates ({TEMPLATES.length} Designs)
                     </CardTitle>
                     <CardDescription>
-                      Choose your default store bill template. Fully compliant with GST standards across Gold, Silver, Grocery, and General trade.
+                      Choose your default store bill template. Fully compliant with BIS Hallmarking, HUID codes, GST 3%, and old gold exchange.
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="relative w-full sm:w-64">
                       <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
                       <Input
-                        placeholder="Search 40 templates..."
+                        placeholder="Search 40 gold templates..."
                         value={templateSearch}
                         onChange={(e) => setTemplateSearch(e.target.value)}
                         className="pl-9 h-9 text-xs"
@@ -424,24 +447,25 @@ export default function BusinessSettingsPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="pt-4 space-y-4">
-                  {/* Category filter pills */}
+                  {/* Style filter pills */}
                   <div className="flex flex-wrap items-center gap-2 pb-2">
                     {[
-                      { id: "all" as const, label: "All Templates", count: 40 },
-                      { id: "gold" as const, label: "Gold Jewellery", count: 10 },
-                      { id: "silver" as const, label: "Silver & Artisan", count: 10 },
-                      { id: "grocery" as const, label: "Grocery & Retail", count: 10 },
-                      { id: "general" as const, label: "General Trade", count: 10 },
-                    ].map((cat) => (
+                      { id: "all", label: "All Gold Designs (40)" },
+                      { id: "traditional", label: "Traditional & Royal" },
+                      { id: "luxury", label: "Modern & Luxury" },
+                      { id: "bridal", label: "Bridal & Artisan" },
+                      { id: "bullion", label: "Bullion & Certified" },
+                      { id: "thermal", label: "Counter & POS Thermal" },
+                    ].map((pill) => (
                       <Button
-                        key={cat.id}
+                        key={pill.id}
                         type="button"
-                        variant={templateCategory === cat.id ? "default" : "outline"}
+                        variant={templateStyle === pill.id ? "default" : "outline"}
                         size="sm"
-                        onClick={() => setTemplateCategory(cat.id)}
+                        onClick={() => setTemplateStyle(pill.id)}
                         className="text-xs h-8"
                       >
-                        {cat.label} ({cat.count})
+                        {pill.label}
                       </Button>
                     ))}
                   </div>
@@ -452,12 +476,11 @@ export default function BusinessSettingsPage() {
                       const isSelected =
                         selectedTemplate === t.id ||
                         (selectedTemplate === "classic" && t.id === "gold-classic-jewellers");
-                      const invoiceData = sampleInvoices[t.category];
                       return (
                         <TemplateThumbnail
                           key={t.id}
                           template={t}
-                          invoice={invoiceData}
+                          invoice={sampleGoldInvoice}
                           isSelected={isSelected}
                           onSelect={(id) => setValue("defaultTemplateId", id, { shouldDirty: true })}
                         />

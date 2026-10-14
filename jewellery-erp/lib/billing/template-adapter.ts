@@ -11,13 +11,9 @@ import {
 import {
   LineItem,
   GoldItem,
-  SilverItem,
-  GeneralItem,
-  GroceryItem,
   CategoryId,
   InvoiceType,
   GoldPurity,
-  SilverPurity,
 } from "@/types/category.types";
 import { toIndianWords } from "./indian-words";
 import { formatAddress, type AddressDetails } from "@/lib/api/business.api";
@@ -118,11 +114,7 @@ function parseAddressObj(addr: unknown): Address {
   return { street: "", city: "", state: "", stateCode: "", pincode: "", country: "India" };
 }
 
-function resolveCategoryId(templateId: string): CategoryId {
-  if (templateId.startsWith("gold-")) return "gold";
-  if (templateId.startsWith("silver-")) return "silver";
-  if (templateId.startsWith("grocery-")) return "grocery";
-  if (templateId.startsWith("general-")) return "general";
+function resolveCategoryId(_templateId: string): CategoryId {
   return "gold";
 }
 
@@ -151,17 +143,6 @@ function mapPurityToGold(val?: string | number | null, karat?: number | null): G
   if (karat === 18) return "18K (750)";
   if (karat === 14) return "14K (585)";
   return "22K (916)";
-}
-
-function mapPurityToSilver(val?: string | number | null): SilverPurity {
-  if (val !== undefined && val !== null) {
-    const str = String(val).trim();
-    if (str.includes("999")) return "999 (Fine Silver)";
-    if (str.includes("925")) return "925 (Sterling)";
-    if (str.includes("900")) return "900 (Coin Silver)";
-    if (str.includes("800")) return "800 (Artisan)";
-  }
-  return "925 (Sterling)";
 }
 
 /**
@@ -240,67 +221,7 @@ export function adaptInvoiceToTemplateData(
     const lineTotal = Number(line.lineTotal || taxableValue + totalTax);
     const hsn = line.hsnCode || line.hsnCodeId || "7113";
 
-    if (category === "silver") {
-      const silverItem: SilverItem = {
-        id: line.id || `item-${idx}`,
-        category: "silver",
-        name: line.description,
-        hsn,
-        grossWeight,
-        netWeight,
-        purity: mapPurityToSilver(line.purityFineness),
-        ratePer10g: ratePerGram * 10,
-        metalValue,
-        makingChargeType: "flat",
-        makingChargeValue: makingCharge,
-        makingChargeAmount: makingCharge,
-        isFiligree: false,
-        metalGstRate: 3,
-        makingGstRate: 5,
-        totalTaxable: taxableValue,
-        totalTax,
-        lineTotal,
-      };
-      return silverItem;
-    }
 
-    if (category === "grocery") {
-      const groceryItem: GroceryItem = {
-        id: line.id || `item-${idx}`,
-        category: "grocery",
-        name: line.description,
-        hsn,
-        isPackaged: true,
-        quantity: line.quantity || 1,
-        unit: "pcs",
-        ratePerUnit: netWeight || ratePerGram || metalValue,
-        gstRate: 3,
-        discountAmount: Number(line.discount || 0),
-        taxableValue,
-        taxAmount: totalTax,
-        lineTotal,
-      };
-      return groceryItem;
-    }
-
-    if (category === "general") {
-      const generalItem: GeneralItem = {
-        id: line.id || `item-${idx}`,
-        category: "general",
-        name: line.description,
-        hsn,
-        quantity: line.quantity || 1,
-        unit: "pcs",
-        ratePerUnit: ratePerGram || metalValue,
-        gstRate: 3,
-        discountPercent: 0,
-        discountAmount: Number(line.discount || 0),
-        taxableValue,
-        taxAmount: totalTax,
-        lineTotal,
-      };
-      return generalItem;
-    }
 
     // Default Gold Item
     const firstExchange = idx === 0 && goldExchangePayments.length > 0 ? goldExchangePayments[0] : null;

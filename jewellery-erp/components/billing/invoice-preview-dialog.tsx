@@ -149,7 +149,7 @@ export function InvoicePreviewDialog({
               >
                 {TEMPLATES.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.name} ({t.category.toUpperCase()} • {t.paperSize})
+                    {t.name} ({t.paperSize}{t.badge ? ` • ${t.badge}` : ""})
                   </option>
                 ))}
               </Select>
