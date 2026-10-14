@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
-import { requireSession } from "@/lib/auth/session";
+import { getSession } from "@/lib/auth/session";
 import { runWithTenant } from "@/lib/db/tenant-context";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 
 export async function GET(): Promise<NextResponse> {
   try {
-    const session = await requireSession();
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return await runWithTenant(session, async () => {
       const notifications = await prisma.notification.findMany({
         where: {
@@ -49,7 +52,10 @@ const PatchSchema = z.object({
 
 export async function PATCH(request: Request): Promise<NextResponse> {
   try {
-    const session = await requireSession();
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const body = await request.json();
     const result = PatchSchema.safeParse(body);
     if (!result.success) {
