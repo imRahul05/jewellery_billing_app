@@ -74,6 +74,7 @@ interface InvoicePreviewDialogProps {
   tenantAddress?: string | null;
   tenantPhone?: string | null;
   defaultTemplate?: string | null;
+  onSelectTemplate?: (templateId: string) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -86,6 +87,7 @@ export function InvoicePreviewDialog({
   tenantAddress,
   tenantPhone,
   defaultTemplate,
+  onSelectTemplate,
   open,
   onOpenChange,
 }: InvoicePreviewDialogProps): React.JSX.Element {
@@ -100,7 +102,8 @@ export function InvoicePreviewDialog({
     return cleaned;
   }, [defaultTemplate]);
 
-  const [activeTemplate, setActiveTemplate] = useState<string>(initialTemplate);
+  const [userTemplate, setUserTemplate] = useState<string | null>(null);
+  const activeTemplate = userTemplate ?? initialTemplate;
 
   const templateInvoiceData = useMemo(() => {
     return adaptInvoiceToTemplateData(
@@ -144,7 +147,11 @@ export function InvoicePreviewDialog({
               </span>
               <Select
                 value={activeTemplate}
-                onChange={(e) => setActiveTemplate(e.target.value)}
+                onChange={(e) => {
+                  const selected = e.target.value;
+                  setUserTemplate(selected);
+                  onSelectTemplate?.(selected);
+                }}
                 className="w-full md:w-64 h-8 text-xs font-medium bg-background"
               >
                 {TEMPLATES.map((t) => (

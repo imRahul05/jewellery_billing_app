@@ -55,12 +55,25 @@ export default function InvoiceDetailPage({
 
 
   const handleFinalize = async (): Promise<void> => {
+    const pdfWindow = window.open("about:blank", "_blank");
     try {
       await finalizeInvoice(id);
-      toast.success("Invoice finalized and sequence number assigned!");
-      // Automatically open PDF in a new tab
-      window.open(`/api/v1/invoices/${id}/pdf?stream=true`, "_blank");
+      const pdfUrl = `/api/v1/invoices/${id}/pdf?stream=true`;
+      if (pdfWindow && !pdfWindow.closed) {
+        pdfWindow.location.href = pdfUrl;
+      } else {
+        window.open(pdfUrl, "_blank");
+      }
+      toast.success("Invoice finalized and sequence number assigned!", {
+        action: {
+          label: "View PDF",
+          onClick: () => window.open(pdfUrl, "_blank"),
+        },
+      });
     } catch (err: unknown) {
+      if (pdfWindow && !pdfWindow.closed) {
+        pdfWindow.close();
+      }
       const msg = err instanceof Error ? err.message : "Failed to finalize invoice";
       toast.error(msg);
     }
@@ -96,16 +109,23 @@ export default function InvoiceDetailPage({
   };
 
   const handleDownloadPdf = async (): Promise<void> => {
+    const pdfWindow = window.open("about:blank", "_blank");
     try {
       toast.info("Generating PDF download link...");
       const res = await invoiceApi.getInvoicePdfUrl(id);
-      if (res.data?.url) {
-        window.open(res.data.url, "_blank");
+      const url = res.data?.url || `/api/v1/invoices/${id}/pdf?stream=true`;
+      if (pdfWindow && !pdfWindow.closed) {
+        pdfWindow.location.href = url;
       } else {
-        window.open(`/api/v1/invoices/${id}/pdf?stream=true`, "_blank");
+        window.open(url, "_blank");
       }
     } catch {
-      window.open(`/api/v1/invoices/${id}/pdf?stream=true`, "_blank");
+      const fallbackUrl = `/api/v1/invoices/${id}/pdf?stream=true`;
+      if (pdfWindow && !pdfWindow.closed) {
+        pdfWindow.location.href = fallbackUrl;
+      } else {
+        window.open(fallbackUrl, "_blank");
+      }
     }
   };
 

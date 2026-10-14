@@ -74,16 +74,23 @@ export function InvoicesClientWrapper({ initialInvoices }: InvoicesClientWrapper
   };
 
   const handleDownloadPdf = async (id: string): Promise<void> => {
+    const pdfWindow = window.open("about:blank", "_blank");
     try {
       toast.info("Generating PDF download link...");
       const res = await invoiceApi.getInvoicePdfUrl(id);
-      if (res.data?.url) {
-        window.open(res.data.url, "_blank");
+      const url = res.data?.url || `/api/v1/invoices/${id}/pdf?stream=true`;
+      if (pdfWindow && !pdfWindow.closed) {
+        pdfWindow.location.href = url;
       } else {
-        window.open(`/api/v1/invoices/${id}/pdf?stream=true`, "_blank");
+        window.open(url, "_blank");
       }
     } catch {
-      window.open(`/api/v1/invoices/${id}/pdf?stream=true`, "_blank");
+      const fallbackUrl = `/api/v1/invoices/${id}/pdf?stream=true`;
+      if (pdfWindow && !pdfWindow.closed) {
+        pdfWindow.location.href = fallbackUrl;
+      } else {
+        window.open(fallbackUrl, "_blank");
+      }
     }
   };
 

@@ -101,7 +101,7 @@ export default function BusinessSettingsPage() {
         invoicePrefix: settings.invoicePrefix,
         invoiceNextSeq: settings.invoiceNextSeq,
         financialYearStartMonth: settings.financialYearStartMonth,
-        defaultTemplateId: settings.defaultTemplateId || "classic",
+        defaultTemplateId: settings.defaultTemplateId || "gold-classic-jewellers",
         defaultPaymentMode: settings.defaultPaymentMode || "cash",
       });
     }
@@ -191,7 +191,7 @@ export default function BusinessSettingsPage() {
         pan: values.pan || null,
         contactEmail: values.contactEmail || null,
         contactPhone: values.contactPhone || null,
-        defaultTemplateId: values.defaultTemplateId || "classic",
+        defaultTemplateId: values.defaultTemplateId || "gold-classic-jewellers",
         address: addressPayload,
         defaultPaymentMode: values.defaultPaymentMode,
       },

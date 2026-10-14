@@ -6,6 +6,7 @@ import { InvoiceCreateSchema } from "@/lib/billing/validation";
 import { calculateInvoice, type LineItemInput } from "@/lib/billing/calculator";
 import { Prisma, Invoice, InvoiceLineItem, MetalType, InvoiceStatus, InvoiceType, Payment, Customer } from "@prisma/client";
 import { revalidateTag } from "next/cache";
+import { resolveTemplateIdForTenant } from "@/lib/billing/templates-db";
 
 
 export interface SerializedInvoiceLineItem {
@@ -294,6 +295,10 @@ export async function POST(request: Request): Promise<NextResponse> {
       // Create invoice draft inside a database transaction
       const draftInvoiceNumber = `DRAFT-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
 
+      // Resolve templateId
+      const targetTemplate = input.templateId || tenant.settings?.defaultTemplateId;
+      const resolvedTemplateId = await resolveTemplateIdForTenant(targetTemplate, session.tenantId);
+
       const invoice = await prisma.$transaction(async (tx) => {
         const inv = await tx.invoice.create({
           data: {
@@ -303,7 +308,7 @@ export async function POST(request: Request): Promise<NextResponse> {
             status: "draft",
             customerId: input.customerId || null,
             supplierId: input.supplierId || null,
-            templateId: input.templateId || null,
+            templateId: resolvedTemplateId,
             relatedInvoiceId: input.relatedInvoiceId || null,
             invoiceDate: input.invoiceDate,
             dueDate: input.dueDate || null,

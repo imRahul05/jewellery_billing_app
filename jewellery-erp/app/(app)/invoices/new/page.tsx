@@ -38,7 +38,9 @@ import {
   Calendar,
   CheckCircle2,
   AlertCircle,
+  LayoutGrid,
 } from "lucide-react";
+import { TEMPLATES } from "@/constants/templates";
 
 export default function InvoiceBuilderPage(): React.JSX.Element {
   const router = useRouter();
@@ -61,8 +63,11 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
   const { mutateAsync: finalizeInvoice } = useFinalizeInvoice(tId);
   const { mutateAsync: createCustomer } = useCreateCustomer(tId);
 
-  // Preview dialog state
+  // Preview & template state
   const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
+  const [userTemplateId, setUserTemplateId] = useState<string | null>(null);
+  const selectedTemplateId = userTemplateId ?? (settings?.defaultTemplateId || "gold-classic-jewellers");
+  const setSelectedTemplateId = setUserTemplateId;
 
   // Step 1 Form Data (Mandatory Customer Details)
   const [customerId, setCustomerId] = useState<string>("");
@@ -375,6 +380,9 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
       }
     }
 
+    // Pre-open window synchronously within the user gesture to avoid popup blocker
+    const pdfWindow = finalize ? window.open("about:blank", "_blank") : null;
+
     try {
       setSubmitting(true);
 
@@ -403,6 +411,7 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
 
       const payload: InvoiceCreateInput = {
         customerId: resolvedCustomerId,
+        templateId: selectedTemplateId,
         invoiceDate: new Date(invoiceDate),
         dueDate: balanceDue > 0 && settlementDueDate ? new Date(settlementDueDate) : null,
         type: invoiceType as "sales" | "purchase" | "quotation" | "estimate" | "return" | "exchange" | "repair",
@@ -440,15 +449,29 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
             dueDate: balanceDue > 0 && settlementDueDate ? settlementDueDate : undefined,
           },
         });
-        toast.success("Invoice finalized and stock updated!");
-        // Automatically open PDF in a new tab
-        window.open(`/api/v1/invoices/${createdInvoice.id}/pdf?stream=true`, "_blank");
+
+        const pdfUrl = `/api/v1/invoices/${createdInvoice.id}/pdf?stream=true`;
+        if (pdfWindow && !pdfWindow.closed) {
+          pdfWindow.location.href = pdfUrl;
+        } else {
+          window.open(pdfUrl, "_blank");
+        }
+
+        toast.success("Invoice finalized and stock updated!", {
+          action: {
+            label: "View PDF",
+            onClick: () => window.open(pdfUrl, "_blank"),
+          },
+        });
       } else {
         toast.success("Invoice draft saved successfully!");
       }
 
       router.push(`/invoices/${createdInvoice.id}`);
     } catch (err: unknown) {
+      if (pdfWindow && !pdfWindow.closed) {
+        pdfWindow.close();
+      }
       const msg = err instanceof Error ? err.message : "Failed to save invoice";
       toast.error(msg);
     } finally {
@@ -1425,6 +1448,39 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Bill Print Template Card */}
+            <Card className="shadow-lg border-primary/20">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <LayoutGrid className="h-4 w-4 text-indigo-600" />
+                  Bill Print Template
+                </CardTitle>
+                <CardDescription>Select the PDF print layout.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Select
+                  value={selectedTemplateId}
+                  onChange={(e) => setSelectedTemplateId(e.target.value)}
+                  className="w-full text-xs font-medium"
+                >
+                  {TEMPLATES.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.paperSize}{t.badge ? ` • ${t.badge}` : ""})
+                    </option>
+                  ))}
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs"
+                  onClick={() => setIsPreviewOpen(true)}
+                  disabled={lines.length === 0}
+                >
+                  <Eye className="mr-1.5 h-3.5 w-3.5" /> Preview Selected Template
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       )}
@@ -1437,7 +1493,8 @@ export default function InvoiceBuilderPage(): React.JSX.Element {
           tenantGstin={settings?.gstin}
           tenantAddress={formatAddress(settings?.addressJson)}
           tenantPhone={settings?.contactPhone}
-          defaultTemplate={settings?.defaultTemplateId}
+          defaultTemplate={selectedTemplateId}
+          onSelectTemplate={(t) => setSelectedTemplateId(t)}
           open={isPreviewOpen}
           onOpenChange={setIsPreviewOpen}
         />

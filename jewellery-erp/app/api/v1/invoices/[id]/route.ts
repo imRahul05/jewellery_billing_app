@@ -6,6 +6,7 @@ import { serializeInvoice } from "../route";
 import { InvoiceCreateSchema } from "@/lib/billing/validation";
 import { calculateInvoice, type LineItemInput } from "@/lib/billing/calculator";
 import { Prisma, MetalType } from "@prisma/client";
+import { resolveTemplateIdForTenant } from "@/lib/billing/templates-db";
 
 export async function GET(
   request: Request,
@@ -167,13 +168,17 @@ export async function PUT(
           },
         });
 
+        // Resolve templateId
+        const targetTemplate = input.templateId !== undefined ? input.templateId : existing.templateId;
+        const resolvedTemplateId = await resolveTemplateIdForTenant(targetTemplate, session.tenantId);
+
         // Update main invoice
         const inv = await tx.invoice.update({
           where: { id },
           data: {
             customerId: input.customerId || null,
             supplierId: input.supplierId || null,
-            templateId: input.templateId || null,
+            templateId: resolvedTemplateId,
             relatedInvoiceId: input.relatedInvoiceId || null,
             invoiceDate: input.invoiceDate,
             dueDate: input.dueDate || null,

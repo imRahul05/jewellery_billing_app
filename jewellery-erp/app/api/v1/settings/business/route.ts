@@ -68,50 +68,11 @@ export interface UnifiedBusinessSettings {
   defaultPaymentMode: PaymentModeDefault;
 }
 
-const getShortTemplateKey = (id: string | null): string => {
-  if (!id) return "classic";
-  const parts = id.split("_");
-  return parts[parts.length - 1] || "classic";
-};
-
-import { TEMPLATES } from "@/constants/templates";
-
-const getFullTemplateId = (shortId: string | null | undefined, tenantId: string): string | null => {
-  if (!shortId) return null;
-  return `${tenantId}_${shortId}`;
-};
-
-async function ensureInvoiceTemplatesExist(tenantId: string): Promise<void> {
-  const existingCount = await prisma.invoiceTemplate.count({
-    where: { tenantId },
-  });
-  if (existingCount >= TEMPLATES.length) {
-    return;
-  }
-
-  const legacyTemplates = [
-    { id: "classic", name: "Classic Traditional" },
-    { id: "modern", name: "Modern Slate" },
-    { id: "minimal", name: "Minimalist Elegant" },
-    { id: "compact", name: "Compact Ticket" },
-    { id: "elegant", name: "Elegant Navy & Gold" },
-  ];
-
-  const allTemplates = [
-    ...legacyTemplates,
-    ...TEMPLATES.map((t) => ({ id: t.id, name: t.name })),
-  ];
-
-  await prisma.invoiceTemplate.createMany({
-    data: allTemplates.map((t) => ({
-      id: `${tenantId}_${t.id}`,
-      tenantId,
-      name: t.name,
-      isDefault: t.id === "gold-classic-jewellers",
-    })),
-    skipDuplicates: true,
-  });
-}
+import {
+  getCleanTemplateId,
+  getFullTemplateId,
+  ensureInvoiceTemplatesExist,
+} from "@/lib/billing/templates-db";
 
 export async function GET(): Promise<NextResponse> {
   try {
@@ -168,7 +129,7 @@ export async function GET(): Promise<NextResponse> {
         invoicePrefix: settings.invoicePrefix,
         invoiceNextSeq: settings.invoiceNextSeq.toString(),
         financialYearStartMonth: settings.financialYearStartMonth,
-        defaultTemplateId: getShortTemplateKey(settings.defaultTemplateId),
+        defaultTemplateId: getCleanTemplateId(settings.defaultTemplateId),
         defaultPaymentMode,
       };
 
@@ -276,7 +237,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
         invoicePrefix: result.settings.invoicePrefix,
         invoiceNextSeq: result.settings.invoiceNextSeq.toString(),
         financialYearStartMonth: result.settings.financialYearStartMonth,
-        defaultTemplateId: getShortTemplateKey(result.settings.defaultTemplateId),
+        defaultTemplateId: getCleanTemplateId(result.settings.defaultTemplateId),
         defaultPaymentMode,
       };
 
