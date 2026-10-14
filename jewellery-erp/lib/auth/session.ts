@@ -11,8 +11,19 @@ export interface Session {
   isSuperAdmin: boolean;
 }
 
+export class AuthenticationError extends Error {
+  constructor(message = "Unauthorized") {
+    super(message);
+    this.name = "AuthenticationError";
+  }
+}
+
+export interface RequireSessionOptions {
+  redirectOnFailure?: boolean;
+}
+
 /**
- * Resolve the authenticated user + active tenant, or redirect.
+ * Resolve the authenticated user + active tenant, or redirect / throw.
  *
  * Neon Auth (Better Auth) owns identity; our `users` table is the app
  * projection keyed by `authUserId`. Tenant is resolved from an ACTIVE
@@ -23,7 +34,9 @@ export interface Session {
  *
  * Returns `{ userId, tenantId, membershipId, isSuperAdmin }`
  */
-export async function requireSession(): Promise<Session> {
+export async function requireSession(options?: RequireSessionOptions): Promise<Session> {
+  const shouldRedirect = options?.redirectOnFailure !== false;
+
   // Check for load test bypass headers before hitting external auth
   try {
     const h = await headers();
@@ -49,7 +62,10 @@ export async function requireSession(): Promise<Session> {
   // explicitly so Cache Components does not probe the session during prerendering.
   await connection();
   const { data: session } = await auth.getSession();
-  if (!session?.user) redirect("/login");
+  if (!session?.user) {
+    if (shouldRedirect) redirect("/login");
+    throw new AuthenticationError("Unauthorized");
+  }
 
   const authUserId = session.user.id;
 
@@ -58,7 +74,10 @@ export async function requireSession(): Promise<Session> {
     where: { authUserId },
     select: { id: true, isSuperAdmin: true },
   });
-  if (!user) redirect("/select-tenant");
+  if (!user) {
+    if (shouldRedirect) redirect("/select-tenant");
+    throw new AuthenticationError("User not found");
+  }
 
   const memberships = await prisma.userTenantMembership.findMany({
     where: {
@@ -76,7 +95,8 @@ export async function requireSession(): Promise<Session> {
   // For regular users, we require at least one active membership.
   // For Super Admins, we do NOT force them to have a tenant membership.
   if (memberships.length === 0 && !user.isSuperAdmin) {
-    redirect("/select-tenant");
+    if (shouldRedirect) redirect("/select-tenant");
+    throw new AuthenticationError("No active membership found");
   }
 
   let membership = memberships[0] || null;
@@ -89,7 +109,8 @@ export async function requireSession(): Promise<Session> {
     if (found) {
       membership = found;
     } else {
-      redirect("/select-tenant");
+      if (shouldRedirect) redirect("/select-tenant");
+      throw new AuthenticationError("Tenant not selected");
     }
   }
 
@@ -118,6 +139,20 @@ export async function requireSession(): Promise<Session> {
   };
 }
 
+/**
+ * Resolve session or return null if unauthenticated / no active tenant.
+ * Does not redirect or throw on missing authentication.
+ */
+export async function getSession(): Promise<Session | null> {
+  try {
+    return await requireSession({ redirectOnFailure: false });
+  } catch (err: unknown) {
+    if (err instanceof AuthenticationError) {
+      return null;
+    }
+    throw err;
+  }
+}
 
 /**
  * Require a session and verify the authenticated user is a Super Admin.
