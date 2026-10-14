@@ -20,7 +20,7 @@ export interface SerializedPayment {
   createdAt: string;
 }
 
-export function serializePayment(p: Payment): SerializedPayment {
+function serializePayment(p: Payment): SerializedPayment {
   return {
     ...p,
     amount: p.amount.toString(),

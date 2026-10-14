@@ -2,9 +2,30 @@ import { NextResponse } from "next/server";
 import { authorize } from "@/lib/rbac/authorize";
 import { runWithTenant } from "@/lib/db/tenant-context";
 import { prisma } from "@/lib/db";
-import { serializeMetalRate } from "../route";
-import { Prisma } from "@prisma/client";
+import { MetalType, Prisma, MetalRate } from "@prisma/client";
 import { z } from "zod";
+
+interface SerializedMetalRate {
+  id: string;
+  metalType: MetalType;
+  purityFineness: string | null;
+  rateDate: string;
+  ratePerGram: string;
+  source: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function serializeMetalRate(rate: MetalRate): SerializedMetalRate {
+  return {
+    ...rate,
+    purityFineness: rate.purityFineness ? rate.purityFineness.toString() : null,
+    rateDate: rate.rateDate.toISOString().split("T")[0],
+    ratePerGram: rate.ratePerGram.toString(),
+    createdAt: rate.createdAt.toISOString(),
+    updatedAt: rate.updatedAt.toISOString(),
+  };
+}
 
 const MetalRateUpdateSchema = z.object({
   ratePerGram: z.number().or(z.string()).transform(val => new Prisma.Decimal(val)),

@@ -9,7 +9,7 @@ export interface SerializedStockMovement extends Omit<StockMovement, "weight" | 
   balanceAfterWeight: string | null;
 }
 
-export function serializeStockMovement(mov: StockMovement): SerializedStockMovement {
+function serializeStockMovement(mov: StockMovement): SerializedStockMovement {
   return {
     ...mov,
     weight: mov.weight.toString(),

@@ -16,7 +16,7 @@ export interface SerializedMetalRate {
   updatedAt: string;
 }
 
-export function serializeMetalRate(rate: MetalRate): SerializedMetalRate {
+function serializeMetalRate(rate: MetalRate): SerializedMetalRate {
   return {
     ...rate,
     purityFineness: rate.purityFineness ? rate.purityFineness.toString() : null,

@@ -1,10 +1,14 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const nextConfig: NextConfig = {
   // Keep Prisma out of the server bundle (native engine).
   serverExternalPackages: ["@prisma/client", "prisma"],
   // Enable Next.js 16 cache components (PPR + 'use cache')
   cacheComponents: true,
+  turbopack: {
+    root: path.resolve(__dirname),
+  },
   experimental: {
     staleTimes: {
       dynamic: 30, // seconds
@@ -13,4 +17,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-
