@@ -106,6 +106,12 @@ Decision Rules:
    - `Invoice.amountPaid = 0`
    - `Invoice.balanceDue = NetPayable`
 
+### 3.5 Architectural Resolutions (Builder Check)
+- **GrandTotal Clarification:** In `calculateInvoice` and `Invoice.grandTotal`, the value already stores the post-deduction net amount (`subtotal + taxes - oldGoldCredit`). Therefore, `NetPayable === Invoice.grandTotal`. Old Gold is never double-deducted.
+- **Finalize Endpoint Contract:** `POST /api/v1/invoices/[id]/finalize` is updated to accept an optional body `{ initialPayments?: InitialPaymentInput[], dueDate?: string }`. Inside the finalization transaction, it writes `Payment` records (status `completed`, linked to `tenantId` and `invoiceId`), updates `Invoice.amountPaid`, `Invoice.balanceDue`, `dueDate`, and `status`. If the body is empty, it maintains full backwards-compatibility. "Save as Draft" does not commit completed payment ledger records.
+- **Split Payment Flexibility:** In Split Payment, both Cash and Digital (UPI/Card/Bank) fields are freely editable up to `NetPayable`. If the sum is less than `NetPayable`, the remainder is automatically calculated as `Balance Due` and triggers the `PARTIALLY PAID` status and optional Due Date picker. Digital split mode includes a selector for payment method (defaults to `upi`).
+- **Tendered Cash & Change Calculation:** Cash fields accept exact payment or an optional tendered amount helper that displays change due to the customer, but the recorded `Payment.amount` is clamped to the payable balance.
+
 ---
 
 ## 4. User Interface Specifications
