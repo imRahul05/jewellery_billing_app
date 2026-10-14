@@ -78,6 +78,18 @@ export interface FinalizeInvoiceInput {
   dueDate?: string | Date | null;
 }
 
+export interface PaymentRecord {
+  id: string;
+  tenantId: string;
+  invoiceId: string;
+  customerId?: string | null;
+  amount: string;
+  method: string;
+  status: string;
+  referenceNo?: string | null;
+  paidAt: string;
+}
+
 export const invoiceApi = {
   getInvoices: (params?: { customerId?: string; status?: string; type?: string; limit?: number; offset?: number }) =>
     api.get<SerializedInvoice[]>("/invoices", params),
@@ -94,7 +106,7 @@ export const invoiceApi = {
   cancelInvoice: (id: string, reason: string) =>
     api.post<SerializedInvoice>(`/invoices/${id}/cancel`, { reason }),
   createPayment: (id: string, data: PaymentCreateInput) =>
-    api.post<{ payment: unknown; invoiceStatus: string; balanceDue: string }>(`/invoices/${id}/payments`, data),
+    api.post<{ payment: PaymentRecord; invoiceStatus: string; balanceDue: string }>(`/invoices/${id}/payments`, data),
   getInvoicePdfUrl: (id: string) =>
     api.get<{ url: string }>(`/invoices/${id}/pdf`),
   createReturn: (id: string, data: ReturnInvoiceInput) =>

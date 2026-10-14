@@ -59,7 +59,7 @@ export const OldGoldExchangeInputSchema = z.object({
 export const InvoiceCreateSchema = z.object({
   customerId: z.string().cuid().optional().nullable(),
   supplierId: z.string().cuid().optional().nullable(),
-  templateId: z.string().cuid().optional().nullable(),
+  templateId: z.string().optional().nullable(),
   relatedInvoiceId: z.string().cuid().optional().nullable(),
   invoiceDate: z.string().or(z.date()).transform(val => new Date(val)),
   dueDate: z.string().or(z.date()).optional().nullable().transform(val => val ? new Date(val) : null),

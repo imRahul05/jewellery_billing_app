@@ -1,11 +1,9 @@
-import React from "react";
-import { pdf, DocumentProps } from "@react-pdf/renderer";
+import { pdf } from "@react-pdf/renderer";
 import { prisma } from "@/lib/db";
 import { isR2Configured, uploadFile } from "@/lib/storage/r2";
 import { InvoicePdfDocument } from "./invoice-pdf";
 import { SerializedInvoice } from "@/app/api/v1/invoices/route";
-import { FileAsset, Tenant } from "@prisma/client";
-import { Readable } from "stream";
+import { FileAsset, Prisma, Tenant } from "@prisma/client";
 import { formatAddress } from "@/lib/api/business.api";
 
 interface CustomerDetails {
@@ -13,17 +11,23 @@ interface CustomerDetails {
   phone: string | null;
   email: string | null;
   gstin: string | null;
-  addressJson: unknown;
+  addressJson: Prisma.JsonValue | string | null;
 }
 
-function getTenantAddressString(addressJson: unknown): string | null {
+function getTenantAddressString(addressJson: Prisma.JsonValue | string | null): string | null {
   return formatAddress(addressJson);
 }
 
-async function streamToBuffer(stream: Readable): Promise<Buffer> {
+async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
   const chunks: Uint8Array[] = [];
   for await (const chunk of stream) {
-    chunks.push(chunk as Uint8Array);
+    if (typeof chunk === "string") {
+      chunks.push(Buffer.from(chunk));
+    } else if (chunk instanceof Uint8Array) {
+      chunks.push(chunk);
+    } else {
+      chunks.push(Buffer.from(chunk));
+    }
   }
   return Buffer.concat(chunks);
 }
@@ -37,7 +41,7 @@ export async function renderInvoicePdfToBuffer(
   tenant: Tenant,
   templateId?: string | null
 ): Promise<Buffer> {
-  const element = React.createElement(InvoicePdfDocument, {
+  const docElement = InvoicePdfDocument({
     invoice,
     customer,
     tenantName: tenant.name,
@@ -47,9 +51,8 @@ export async function renderInvoicePdfToBuffer(
     templateId,
   });
 
-  const docElement = element as unknown as React.ReactElement<DocumentProps>;
   const stream = await pdf(docElement).toBuffer();
-  return await streamToBuffer(stream as unknown as Readable);
+  return await streamToBuffer(stream);
 }
 
 /**
