@@ -74,13 +74,22 @@ const getShortTemplateKey = (id: string | null): string => {
   return parts[parts.length - 1] || "classic";
 };
 
+import { TEMPLATES } from "@/constants/templates";
+
 const getFullTemplateId = (shortId: string | null | undefined, tenantId: string): string | null => {
   if (!shortId) return null;
   return `${tenantId}_${shortId}`;
 };
 
 async function ensureInvoiceTemplatesExist(tenantId: string): Promise<void> {
-  const templates = [
+  const existingCount = await prisma.invoiceTemplate.count({
+    where: { tenantId },
+  });
+  if (existingCount >= TEMPLATES.length) {
+    return;
+  }
+
+  const legacyTemplates = [
     { id: "classic", name: "Classic Traditional" },
     { id: "modern", name: "Modern Slate" },
     { id: "minimal", name: "Minimalist Elegant" },
@@ -88,19 +97,20 @@ async function ensureInvoiceTemplatesExist(tenantId: string): Promise<void> {
     { id: "elegant", name: "Elegant Navy & Gold" },
   ];
 
-  for (const t of templates) {
-    const fullId = `${tenantId}_${t.id}`;
-    await prisma.invoiceTemplate.upsert({
-      where: { tenantId_name: { tenantId, name: t.name } },
-      create: {
-        id: fullId,
-        tenantId,
-        name: t.name,
-        isDefault: t.id === "classic",
-      },
-      update: {},
-    });
-  }
+  const allTemplates = [
+    ...legacyTemplates,
+    ...TEMPLATES.map((t) => ({ id: t.id, name: t.name })),
+  ];
+
+  await prisma.invoiceTemplate.createMany({
+    data: allTemplates.map((t) => ({
+      id: `${tenantId}_${t.id}`,
+      tenantId,
+      name: t.name,
+      isDefault: t.id === "gold-classic-jewellers",
+    })),
+    skipDuplicates: true,
+  });
 }
 
 export async function GET(): Promise<NextResponse> {

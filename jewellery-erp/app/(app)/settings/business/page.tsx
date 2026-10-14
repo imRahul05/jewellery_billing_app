@@ -15,9 +15,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatINR } from "@/lib/format";
-import { Coins, Loader2, Save, Settings2, TrendingUp } from "lucide-react";
+import { Coins, LayoutGrid, Loader2, Save, Search, Settings2, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { MetalType } from "@prisma/client";
+import { TEMPLATES } from "@/constants/templates";
+import { createInitialInvoice } from "@/constants/defaults";
+import { TemplateThumbnail } from "@/components/gallery/template-thumbnail";
+import type { CategoryId } from "@/types/category.types";
 
 const BusinessSettingsSchema = z.object({
   name: z.string().min(1, "Business Name is required"),
@@ -121,7 +125,30 @@ export default function BusinessSettingsPage() {
 
   // useWatch is React Compiler-compatible; watch() from useForm() is not.
   const selectedMetalType = useWatch({ control: rateControl, name: "metalType" });
-  const selectedTemplate = useWatch({ control, name: "defaultTemplateId" }) || "classic";
+  const selectedTemplate = useWatch({ control, name: "defaultTemplateId" }) || "gold-classic-jewellers";
+
+  type TemplateCategoryFilter = "all" | CategoryId;
+  const [templateCategory, setTemplateCategory] = React.useState<TemplateCategoryFilter>("all");
+  const [templateSearch, setTemplateSearch] = React.useState<string>("");
+
+  const sampleInvoices = React.useMemo(() => ({
+    gold: createInitialInvoice("gold"),
+    silver: createInitialInvoice("silver"),
+    grocery: createInitialInvoice("grocery"),
+    general: createInitialInvoice("general"),
+  }), []);
+
+  const filteredTemplates = React.useMemo(() => {
+    return TEMPLATES.filter((t) => {
+      const matchesCategory = templateCategory === "all" || t.category === templateCategory;
+      const matchesSearch =
+        templateSearch.trim() === "" ||
+        t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
+        t.description.toLowerCase().includes(templateSearch.toLowerCase()) ||
+        t.paperSize.toLowerCase().includes(templateSearch.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [templateCategory, templateSearch]);
 
   const onSettingsSubmit = (values: BusinessSettingsFormValues) => {
     const addressPayload = values.addressStreet || values.addressCity
@@ -372,73 +399,68 @@ export default function BusinessSettingsPage() {
                 </CardContent>
               </Card>
 
-              {/* Invoice Layout Templates Card */}
+              {/* Invoice Layout Templates Gallery (40 Designs) */}
               <Card className="shadow-sm border md:col-span-2">
-                <CardHeader>
-                  <CardTitle>Invoice Template Layout</CardTitle>
-                  <CardDescription>Choose the default layout format for your generated bills and PDFs.</CardDescription>
+                <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b">
+                  <div>
+                    <CardTitle className="text-lg font-bold flex items-center gap-2">
+                      <LayoutGrid className="size-5 text-primary" />
+                      Invoice Template Gallery ({TEMPLATES.length} Designs)
+                    </CardTitle>
+                    <CardDescription>
+                      Choose your default store bill template. Fully compliant with GST standards across Gold, Silver, Grocery, and General trade.
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="relative w-full sm:w-64">
+                      <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search 40 templates..."
+                        value={templateSearch}
+                        onChange={(e) => setTemplateSearch(e.target.value)}
+                        className="pl-9 h-9 text-xs"
+                      />
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <CardContent className="pt-4 space-y-4">
+                  {/* Category filter pills */}
+                  <div className="flex flex-wrap items-center gap-2 pb-2">
                     {[
-                      { id: "classic", name: "Classic Traditional", desc: "Standard GST template with clear borders and dark table headers." },
-                      { id: "modern", name: "Modern Slate", desc: "Contemporary look featuring a bold indigo banner and alternating rows." },
-                      { id: "minimal", name: "Minimalist", desc: "Clean luxury aesthetic utilizing white space and thin line dividers." },
-                      { id: "compact", name: "Compact", desc: "Density-optimized spacing designed for high-density receipts." },
-                      { id: "elegant", name: "Elegant Navy & Gold", desc: "Luxurious classic look featuring navy headers and golden accents." },
-                    ].map((t) => {
-                      const isSelected = selectedTemplate === t.id;
+                      { id: "all" as const, label: "All Templates", count: 40 },
+                      { id: "gold" as const, label: "Gold Jewellery", count: 10 },
+                      { id: "silver" as const, label: "Silver & Artisan", count: 10 },
+                      { id: "grocery" as const, label: "Grocery & Retail", count: 10 },
+                      { id: "general" as const, label: "General Trade", count: 10 },
+                    ].map((cat) => (
+                      <Button
+                        key={cat.id}
+                        type="button"
+                        variant={templateCategory === cat.id ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setTemplateCategory(cat.id)}
+                        className="text-xs h-8"
+                      >
+                        {cat.label} ({cat.count})
+                      </Button>
+                    ))}
+                  </div>
+
+                  {/* Template Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-h-[680px] overflow-y-auto p-1">
+                    {filteredTemplates.map((t) => {
+                      const isSelected =
+                        selectedTemplate === t.id ||
+                        (selectedTemplate === "classic" && t.id === "gold-classic-jewellers");
+                      const invoiceData = sampleInvoices[t.category];
                       return (
-                        <div
+                        <TemplateThumbnail
                           key={t.id}
-                          onClick={() => setValue("defaultTemplateId", t.id)}
-                          className={`cursor-pointer rounded-xl border p-4 transition-all duration-200 relative overflow-hidden flex flex-col justify-between h-[235px] ${
-                            isSelected
-                              ? "border-primary ring-2 ring-primary/20 bg-primary/[0.02]"
-                              : "hover:border-slate-300 dark:hover:border-slate-700 bg-card"
-                          }`}
-                        >
-                          <div>
-                            {/* Miniature Layout Preview Visual */}
-                            <div className="aspect-[4/3] rounded-lg border bg-slate-50 dark:bg-slate-900/40 p-2 mb-3 flex flex-col justify-between overflow-hidden shadow-inner">
-                              {/* Header bar representation */}
-                              <div className="space-y-0.5">
-                                {t.id === "modern" && <div className="h-1 bg-indigo-600 w-full rounded-sm mb-0.5" />}
-                                <div className="flex justify-between items-center">
-                                  <div className={`h-2.5 w-1/3 rounded-sm ${t.id === "elegant" ? "bg-amber-600" : "bg-slate-400"}`} />
-                                  <div className="h-2 w-1/4 bg-slate-300 rounded-sm" />
-                                </div>
-                                <div className="h-1.5 w-1/2 bg-slate-200 rounded-sm" />
-                              </div>
-
-                              {/* Table representation */}
-                              <div className="space-y-0.5 my-1.5">
-                                <div className={`h-2 w-full rounded-sm ${t.id === "minimal" ? "bg-zinc-200" : t.id === "elegant" ? "bg-blue-900" : t.id === "compact" ? "bg-slate-700" : "bg-slate-800"}`} />
-                                <div className="h-1.5 w-full bg-slate-200 rounded-sm" />
-                                {t.id !== "minimal" && <div className="h-1.5 w-full bg-slate-100 rounded-sm" />}
-                              </div>
-
-                              {/* Total representation */}
-                              <div className="flex justify-end">
-                                <div className="space-y-0.5 w-1/2">
-                                  <div className="h-1.5 w-full bg-slate-200 rounded-sm" />
-                                  <div className={`h-2 w-full rounded-sm ${t.id === "elegant" ? "bg-amber-500" : "bg-slate-400"}`} />
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <h3 className="font-semibold text-xs mb-1">{t.name}</h3>
-                            <p className="text-[10px] text-muted-foreground leading-snug">{t.desc}</p>
-                          </div>
-
-                          {isSelected && (
-                            <div className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full p-0.5 shadow-sm">
-                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
+                          template={t}
+                          invoice={invoiceData}
+                          isSelected={isSelected}
+                          onSelect={(id) => setValue("defaultTemplateId", id, { shouldDirty: true })}
+                        />
                       );
                     })}
                   </div>
