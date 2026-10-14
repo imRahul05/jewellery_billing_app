@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 
-export const AddressSchema = z.object({
+const AddressSchema = z.object({
   street: z.string().min(1),
   city: z.string().min(1),
   state: z.string().min(1),
@@ -15,7 +15,7 @@ export const AddressSchema = z.object({
 
 export type AddressDetails = z.infer<typeof AddressSchema>;
 
-export function parseAddress(val: unknown): AddressDetails | null {
+function parseAddress(val: unknown): AddressDetails | null {
   if (!val || typeof val !== "object") return null;
   const res = AddressSchema.safeParse(val);
   return res.success ? res.data : null;
@@ -184,8 +184,8 @@ export async function PATCH(request: Request): Promise<NextResponse> {
 
       const result = await prisma.$transaction(async (tx) => {
         const addressToSave = updateInput.address !== undefined
-          ? (updateInput.address ? (updateInput.address as Prisma.InputJsonValue) : null)
-          : (updateInput.addressJson !== undefined ? (updateInput.addressJson as Prisma.InputJsonValue) : undefined);
+          ? (updateInput.address ? (updateInput.address as Prisma.InputJsonValue) : Prisma.JsonNull)
+          : (updateInput.addressJson !== undefined ? (updateInput.addressJson ? (updateInput.addressJson as Prisma.InputJsonValue) : Prisma.JsonNull) : undefined);
 
         const updatedTenant = await tx.tenant.update({
           where: { id: session.tenantId },
