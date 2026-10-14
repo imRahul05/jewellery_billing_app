@@ -6,6 +6,17 @@ import { serializeInvoice } from "../../route";
 import { calculateInvoice } from "@/lib/billing/calculator";
 import { assignInvoiceNumber } from "@/lib/billing/numbering";
 import { Prisma, StockMovementType, InvoiceStatus } from "@prisma/client";
+import { z } from "zod";
+
+const FinalizeInputSchema = z.object({
+  initialPayments: z.array(z.object({
+    amount: z.number().or(z.string()).transform(v => new Prisma.Decimal(v)),
+    method: z.enum(["cash", "card", "upi", "bank_transfer", "cheque", "store_credit", "gold_exchange"]),
+    referenceNo: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+  })).optional(),
+  dueDate: z.string().or(z.date()).optional().nullable(),
+}).optional();
 
 export async function POST(
   request: Request,
@@ -15,6 +26,14 @@ export async function POST(
     // Both draft creation and finalization are gated by "invoice:create" in seeded permissions
     const session = await authorize("invoice:create");
     const { id } = await params;
+
+    let bodyData: z.infer<typeof FinalizeInputSchema> = undefined;
+    try {
+      const json = await request.json();
+      bodyData = FinalizeInputSchema.parse(json);
+    } catch {
+      // Body is optional for backwards compatibility
+    }
 
     return await runWithTenant(session, async () => {
       const invoice = await prisma.invoice.findUnique({
@@ -154,12 +173,37 @@ export async function POST(
           }
         }
 
+        if (bodyData?.initialPayments && bodyData.initialPayments.length > 0) {
+          for (const p of bodyData.initialPayments) {
+            if (p.amount.greaterThan(0)) {
+              await tx.payment.create({
+                data: {
+                  tenantId: session.tenantId,
+                  invoiceId: id,
+                  customerId: invoice.customerId,
+                  amount: p.amount,
+                  method: p.method,
+                  status: "completed",
+                  referenceNo: p.referenceNo || null,
+                  receivedBy: session.userId,
+                  paidAt: new Date(),
+                },
+              });
+            }
+          }
+        }
+
+        // Fetch all payments (including existing old gold exchange and newly added payments)
+        const allPayments = await tx.payment.findMany({
+          where: { invoiceId: id },
+        });
+
         // Calculate amount paid (excluding gold_exchange payments)
-        const nonGoldPaymentsSum = invoice.payments
+        const nonGoldPaymentsSum = allPayments
           .filter((p) => p.method !== "gold_exchange")
           .reduce((sum, p) => sum.add(p.amount), new Prisma.Decimal(0));
 
-        const balanceDue = calcResult.grandTotal.sub(nonGoldPaymentsSum);
+        const balanceDue = Prisma.Decimal.max(new Prisma.Decimal(0), calcResult.grandTotal.sub(nonGoldPaymentsSum));
         let finalStatus = "issued";
         if (nonGoldPaymentsSum.greaterThan(0)) {
           finalStatus = nonGoldPaymentsSum.greaterThanOrEqualTo(calcResult.grandTotal) ? "paid" : "partially_paid";
@@ -190,6 +234,7 @@ export async function POST(
             grandTotal: calcResult.grandTotal,
             amountPaid: nonGoldPaymentsSum,
             balanceDue,
+            dueDate: bodyData?.dueDate ? new Date(bodyData.dueDate) : undefined,
           },
           include: {
             lineItems: true,
