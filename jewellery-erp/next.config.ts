@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@prisma/client", "prisma"],
   // Enable Next.js 16 cache components (PPR + 'use cache')
   cacheComponents: true,
+  turbopack: {
+    root: __dirname,
+  },
   experimental: {
     staleTimes: {
       dynamic: 30, // seconds
