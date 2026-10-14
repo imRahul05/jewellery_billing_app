@@ -5,6 +5,24 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 
+export const AddressSchema = z.object({
+  street: z.string().min(1),
+  city: z.string().min(1),
+  state: z.string().min(1),
+  postalCode: z.string().min(1),
+  country: z.string().default("India"),
+});
+
+export type AddressDetails = z.infer<typeof AddressSchema>;
+
+export function parseAddress(val: unknown): AddressDetails | null {
+  if (!val || typeof val !== "object") return null;
+  const res = AddressSchema.safeParse(val);
+  return res.success ? res.data : null;
+}
+
+export type PaymentModeDefault = "cash" | "upi" | "card" | "split" | "due";
+
 const BusinessSettingUpdateSchema = z.object({
   // Tenant profile fields
   name: z.string().min(1).optional(),
@@ -12,6 +30,7 @@ const BusinessSettingUpdateSchema = z.object({
   pan: z.string().length(10).regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, "Invalid PAN format").optional().nullable(),
   contactEmail: z.string().email().optional().nullable(),
   contactPhone: z.string().min(10).optional().nullable(),
+  address: AddressSchema.optional().nullable(),
   addressJson: z.unknown().optional().nullable(),
   logoAssetId: z.string().optional().nullable(),
 
@@ -25,6 +44,7 @@ const BusinessSettingUpdateSchema = z.object({
   invoiceNextSeq: z.number().or(z.string()).transform(v => BigInt(v)).optional(),
   financialYearStartMonth: z.number().int().min(1).max(12).optional(),
   defaultTemplateId: z.string().nullable().optional(),
+  defaultPaymentMode: z.enum(["cash", "upi", "card", "split", "due"]).optional(),
 });
 
 export interface UnifiedBusinessSettings {
@@ -34,6 +54,7 @@ export interface UnifiedBusinessSettings {
   contactEmail: string | null;
   contactPhone: string | null;
   addressJson: unknown;
+  address: AddressDetails | null;
   logoAssetId: string | null;
   baseCurrency: string;
   defaultGstRate: string;
@@ -44,6 +65,7 @@ export interface UnifiedBusinessSettings {
   invoiceNextSeq: string;
   financialYearStartMonth: number;
   defaultTemplateId: string | null;
+  defaultPaymentMode: PaymentModeDefault;
 }
 
 const getShortTemplateKey = (id: string | null): string => {
@@ -116,6 +138,9 @@ export async function GET(): Promise<NextResponse> {
         });
       }
 
+      const settingsObj = (settings.settingsJson && typeof settings.settingsJson === "object" ? settings.settingsJson : {}) as Record<string, unknown>;
+      const defaultPaymentMode = (settingsObj.defaultPaymentMode as PaymentModeDefault) || "cash";
+
       const responseData: UnifiedBusinessSettings = {
         name: tenant.name,
         gstin: tenant.gstin,
@@ -123,6 +148,7 @@ export async function GET(): Promise<NextResponse> {
         contactEmail: tenant.contactEmail,
         contactPhone: tenant.contactPhone,
         addressJson: tenant.addressJson,
+        address: parseAddress(tenant.addressJson),
         logoAssetId: tenant.logoAssetId,
         baseCurrency: settings.baseCurrency,
         defaultGstRate: settings.defaultGstRate.toString(),
@@ -133,6 +159,7 @@ export async function GET(): Promise<NextResponse> {
         invoiceNextSeq: settings.invoiceNextSeq.toString(),
         financialYearStartMonth: settings.financialYearStartMonth,
         defaultTemplateId: getShortTemplateKey(settings.defaultTemplateId),
+        defaultPaymentMode,
       };
 
       return NextResponse.json({ data: responseData });
@@ -156,6 +183,10 @@ export async function PATCH(request: Request): Promise<NextResponse> {
       await ensureInvoiceTemplatesExist(session.tenantId);
 
       const result = await prisma.$transaction(async (tx) => {
+        const addressToSave = updateInput.address !== undefined
+          ? (updateInput.address ? (updateInput.address as Prisma.InputJsonValue) : null)
+          : (updateInput.addressJson !== undefined ? (updateInput.addressJson as Prisma.InputJsonValue) : undefined);
+
         const updatedTenant = await tx.tenant.update({
           where: { id: session.tenantId },
           data: {
@@ -164,10 +195,19 @@ export async function PATCH(request: Request): Promise<NextResponse> {
             pan: updateInput.pan !== undefined ? updateInput.pan : undefined,
             contactEmail: updateInput.contactEmail !== undefined ? updateInput.contactEmail : undefined,
             contactPhone: updateInput.contactPhone !== undefined ? updateInput.contactPhone : undefined,
-            addressJson: updateInput.addressJson !== undefined ? (updateInput.addressJson as Prisma.InputJsonValue) : undefined,
+            addressJson: addressToSave,
             logoAssetId: updateInput.logoAssetId !== undefined ? updateInput.logoAssetId : undefined,
           },
         });
+
+        const currentSettings = await tx.businessSetting.findUnique({
+          where: { tenantId: session.tenantId },
+        });
+        const currentSettingsObj = (currentSettings?.settingsJson && typeof currentSettings.settingsJson === "object" ? currentSettings.settingsJson : {}) as Record<string, unknown>;
+        const newSettingsObj = {
+          ...currentSettingsObj,
+          ...(updateInput.defaultPaymentMode !== undefined ? { defaultPaymentMode: updateInput.defaultPaymentMode } : {}),
+        };
 
         // Ensure settings row exists
         await tx.businessSetting.upsert({
@@ -183,6 +223,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
             invoiceNextSeq: updateInput.invoiceNextSeq ?? BigInt(1),
             financialYearStartMonth: updateInput.financialYearStartMonth ?? 4,
             defaultTemplateId: getFullTemplateId(updateInput.defaultTemplateId, session.tenantId),
+            settingsJson: newSettingsObj as Prisma.InputJsonValue,
           },
           update: {
             baseCurrency: updateInput.baseCurrency,
@@ -194,6 +235,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
             invoiceNextSeq: updateInput.invoiceNextSeq,
             financialYearStartMonth: updateInput.financialYearStartMonth,
             defaultTemplateId: getFullTemplateId(updateInput.defaultTemplateId, session.tenantId),
+            settingsJson: newSettingsObj as Prisma.InputJsonValue,
           },
         });
 
@@ -204,6 +246,9 @@ export async function PATCH(request: Request): Promise<NextResponse> {
         return { tenant: updatedTenant, settings: finalSettings };
       });
 
+      const finalSettingsObj = (result.settings.settingsJson && typeof result.settings.settingsJson === "object" ? result.settings.settingsJson : {}) as Record<string, unknown>;
+      const defaultPaymentMode = (finalSettingsObj.defaultPaymentMode as PaymentModeDefault) || "cash";
+
       const responseData: UnifiedBusinessSettings = {
         name: result.tenant.name,
         gstin: result.tenant.gstin,
@@ -211,6 +256,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
         contactEmail: result.tenant.contactEmail,
         contactPhone: result.tenant.contactPhone,
         addressJson: result.tenant.addressJson,
+        address: parseAddress(result.tenant.addressJson),
         logoAssetId: result.tenant.logoAssetId,
         baseCurrency: result.settings.baseCurrency,
         defaultGstRate: result.settings.defaultGstRate.toString(),
@@ -221,6 +267,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
         invoiceNextSeq: result.settings.invoiceNextSeq.toString(),
         financialYearStartMonth: result.settings.financialYearStartMonth,
         defaultTemplateId: getShortTemplateKey(result.settings.defaultTemplateId),
+        defaultPaymentMode,
       };
 
       return NextResponse.json({ data: responseData });

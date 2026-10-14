@@ -1,6 +1,27 @@
 import { api } from "./http";
 import type { MetalRate, Prisma } from "@prisma/client";
 
+export interface AddressDetails {
+  street: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+}
+
+export function isAddressDetails(val: unknown): val is AddressDetails {
+  if (!val || typeof val !== "object") return false;
+  const v = val as Record<string, unknown>;
+  return (
+    typeof v.street === "string" &&
+    typeof v.city === "string" &&
+    typeof v.state === "string" &&
+    typeof v.postalCode === "string"
+  );
+}
+
+export type PaymentModeDefault = "cash" | "upi" | "card" | "split" | "due";
+
 export interface UnifiedBusinessSettings {
   name: string;
   gstin: string | null;
@@ -8,6 +29,7 @@ export interface UnifiedBusinessSettings {
   contactEmail: string | null;
   contactPhone: string | null;
   addressJson: unknown;
+  address: AddressDetails | null;
   logoAssetId: string | null;
   baseCurrency: string;
   defaultGstRate: Prisma.Decimal | string | number;
@@ -18,6 +40,7 @@ export interface UnifiedBusinessSettings {
   invoiceNextSeq: string | number | bigint;
   financialYearStartMonth: number;
   defaultTemplateId: string | null;
+  defaultPaymentMode: PaymentModeDefault;
 }
 
 export interface AppNotification {
